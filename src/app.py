@@ -1,137 +1,222 @@
-"""Eagle Eye — AI-assisted forensic document examination workspace."""
+"""Eagle Eye: Streamlit UI. Run with: streamlit run src/app.py"""
+import time
+from datetime import date
 
 import streamlit as st
 
-from ui.components import badge, metric_row, panel, render_pipeline
-from ui.mcp_client import classify_anomaly, fetch_case_precedents, generate_expert_report, map_to_standards, run_engine, score_forgery_confidence
-from ui.mock_data import demo_case, default_observations
-from ui.report_export import build_report
-from ui.theme import inject_css
+from ui import mcp_client as mc, report as R, theme as T
+from ui.mock_data import SCENARIOS
+
+st.set_page_config(page_title="Eagle Eye", page_icon="🦅", layout="wide")
+st.markdown(T.CSS, unsafe_allow_html=True)
+S = st.session_state
+for k, v in {"step": 0, "case": {}, "obs": {}, "file": None, "engine": None, "bob": None,
+             "scenario": "Forged COVID certificate"}.items():
+    S.setdefault(k, v)
+
+DOC_TYPES = ["Degree or marksheet", "Certificate", "ID card", "Property document", "FIR",
+             "COVID vaccination certificate", "Other"]
+SIG = ["Not applicable", "Consistent", "Minor variation", "Clearly different"]
+SEAL = ["Not applicable", "Consistent", "Faint or smudged", "Missing", "Different from reference"]
+PAPER = ["Different texture", "Tinted or off-white", "Missing watermark", "Uneven wear", "Trimmed edges"]
+INK = ["Ink spread", "Feathering", "Different ink shades", "Toner and inkjet mixed", "Overwriting"]
+SKILLS = ["Typography analysis", "Metadata analysis", "Standards mapping", "Report drafting"]
 
 
-st.set_page_config(page_title="Eagle Eye · Forensic Workspace", page_icon="◉", layout="wide", initial_sidebar_state="expanded")
-inject_css()
+def go(n):
+    S.step = n
+    st.rerun()
 
 
-def init_state():
-    if "case" not in st.session_state:
-        st.session_state.case = demo_case()
-    if "page" not in st.session_state:
-        st.session_state.page = "Case workspace"
+def reset():
+    for k in ("case", "obs", "file", "engine", "bob"):
+        S.pop(k, None)
+    S.step = 0
+    st.rerun()
 
 
-def sidebar():
-    with st.sidebar:
-        st.markdown('<div class="brand"><span class="brand-mark">◉</span><span class="brand-name">EAGLE EYE</span><div class="brand-sub">Forensic document intelligence</div></div>', unsafe_allow_html=True)
-        choice = st.radio("Workspace", ["Case workspace", "Bob orchestration", "Findings & standards", "Report review"], label_visibility="collapsed", index=["Case workspace", "Bob orchestration", "Findings & standards", "Report review"].index(st.session_state.page))
-        st.session_state.page = choice
-        st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="muted">ACTIVE CASE</div><div style="color:white;font-weight:600;margin-top:5px">{st.session_state.case["observations"]["case_number"]}</div><div class="muted" style="margin-top:4px">COVID Certificate · {st.session_state.case["observations"]["examiner"]}</div>', unsafe_allow_html=True)
-        st.markdown('<div style="height:24px"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="note" style="background:#13283e;border-color:#27445e;color:#c7d9e6">Decision support only.<br><br>Final interpretation, signature and admissibility decisions remain with the examiner.</div>', unsafe_allow_html=True)
+def stale():
+    S.engine, S.bob = None, None
 
 
-def header(kicker, title, subtitle):
-    st.markdown(f'<div class="topline"><div><div class="eyebrow">{kicker}</div><h1>{title}</h1><div class="muted">{subtitle}</div></div><div>{badge("BOB ONLINE", "teal")} &nbsp; {badge("MOCK DATA", "gold")}</div></div>', unsafe_allow_html=True)
+def pick(options, value, default=0):
+    return options.index(value) if value in options else default
 
 
-def workspace():
-    case = st.session_state.case
-    header("Case workspace / Intake", "Examination console", "A controlled workspace for document observations, automated checks and examiner review.")
-    left, right = st.columns([1.05, 1.45], gap="large")
-    with left:
-        with st.container(border=True):
-            st.markdown('<div class="panel-title"><h2>Questioned item</h2><span class="badge badge-gray">STEP 01 · INTAKE</span></div>', unsafe_allow_html=True)
-            uploaded = st.file_uploader("Upload case file", type=["pdf", "png", "jpg", "jpeg", "tif", "tiff"], help="Mock mode accepts any file; the engine response remains deterministic.")
-            if uploaded:
-                st.session_state.case["observations"]["filename"] = uploaded.name
-                st.success(f"Queued: {uploaded.name}")
-            st.markdown('<div class="muted" style="margin:12px 0 7px">Evidence handling</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="mono">SHA-256 · {case["engine"]["hash"]}</div><div class="muted" style="margin-top:5px">{case["observations"]["chain_of_custody"]}</div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-space"></div>', unsafe_allow_html=True)
-        with st.form("observations"):
-            st.markdown('<div class="panel-title"><h2>Structured observations</h2><span class="badge badge-teal">EXAMINER INPUT</span></div>', unsafe_allow_html=True)
-            obs = case["observations"]
-            obs["document_type"] = st.text_input("Document type", obs["document_type"])
-            obs["issuing_body"] = st.text_input("Issuing body", obs["issuing_body"])
-            obs["case_number"] = st.text_input("Case number", obs["case_number"])
-            obs["examiner"] = st.text_input("Examiner", obs["examiner"])
-            obs["observations"] = st.text_area("Observations", obs["observations"], height=90)
-            if st.form_submit_button("Save observations", use_container_width=True):
-                st.success("Observations saved to active case.")
-    with right:
-        panel("Automated forensic checks", f'<div class="muted" style="margin-bottom:8px">Python engine output · {case["engine"]["processed_at"]}</div>' + "".join([f'<div class="flag-row"><b>{f["name"]}</b>{badge(f["status"], "red" if f["status"]=="High" else "gold" if f["status"]=="Medium" else "gray")}<span class="flag-detail">{f["detail"]}</span></div>' for f in case["engine"]["flags"]]), badge("5 checks complete", "teal"))
-        st.markdown('<div class="section-space"></div>', unsafe_allow_html=True)
-        metric_row([("87 / 100", "Bob confidence"), ("5", "Checks run"), ("0.42", "Integrity signal")])
-        st.markdown('<div class="section-space"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="note"><b>Interpretation guardrail.</b> High-severity flags are indicators for examiner review. They do not independently establish alteration or intent.</div>', unsafe_allow_html=True)
-        if st.button("Run / refresh Bob analysis", type="primary", use_container_width=True):
-            st.session_state.case["engine"] = run_engine(st.session_state.case["observations"].get("filename", "mock-case"))
-            st.session_state.page = "Bob orchestration"
-            st.rerun()
+# ---------------------------------------------------------------- sidebar
+with st.sidebar:
+    st.markdown("### Case console")
+    st.selectbox("Demo scenario", list(SCENARIOS), key="scenario", on_change=stale,
+                 help="Switches the mock data used for analysis.")
+    if st.button("Load demo case", use_container_width=True):
+        S.case = {"no": "FSL/2026/0417", "examiner": "Dr. A. Mehta",
+                  "type": "COVID vaccination certificate", "date": date.today()}
+        S.obs = {"sig": "Minor variation", "seal": "Consistent", "paper": ["Tinted or off-white"],
+                 "ink": ["Different ink shades"], "notes": "Name line looks re-typed under magnification.",
+                 "sig_n": ""}
+        S.file = ("demo_certificate.jpg", None)
+        stale()
+        go(1)
+    if S.case:
+        st.caption(f"Case {S.case.get('no', '-')}")
+        st.caption(f"File: {S.file[0] if S.file else 'none'}")
+    if st.button("Start new case", use_container_width=True):
+        reset()
+    with st.expander("About and limitations"):
+        st.caption("Eagle Eye supports the examiner and does not replace them. Scores come from "
+                   "rule-based checks. Standards, precedents and legal sections are demo data until verified.")
+
+st.markdown(T.header(), unsafe_allow_html=True)
+st.markdown(T.stepper(S.step), unsafe_allow_html=True)
 
 
-def orchestration():
-    case = st.session_state.case
-    header("Bob / EagleEye Mode", "Visible orchestration trace", "The pipeline is explicit: Bob activates the examiner skillset, calls MCP tools, then hands the full case to Report Engine.")
-    left, right = st.columns([1.25, .75], gap="large")
-    with left:
-        panel("Bob execution trace", '<div class="muted" style="margin-bottom:12px">Run ID · <span class="mono">ee-0041-bob-20260928</span></div>')
-        render_pipeline(case["steps"], 7)
-    with right:
-        panel("MCP return · classify_anomaly", f'<div class="mono">{case["outputs"]["classification"]["type"]}</div><div class="muted" style="margin-top:7px">Category · {case["outputs"]["classification"]["category"]}</div>', badge("RETURNED", "teal"))
-        st.markdown('<div class="section-space"></div>', unsafe_allow_html=True)
-        panel("MCP return · score_forgery_confidence", f'<div class="metric-value">{case["outputs"]["confidence"]["score"]}<span class="muted"> / 100</span></div>' + "".join([f'<div class="muted" style="margin-top:8px">• {x}</div>' for x in case["outputs"]["confidence"]["reasoning"]]), badge("RETURNED", "teal"))
-        st.markdown('<div class="section-space"></div>', unsafe_allow_html=True)
-        panel("MCP return · fetch_case_precedents", '<b>State v. Sharma 2022</b><div class="muted">Relevance · 0.91</div>', badge("1 MATCH", "gold"))
-    st.markdown('<div class="footer-note">Integration status: demo uses deterministic mock adapters in <span class="mono">src/ui/mcp_client.py</span>. Each adapter is isolated for replacement with the real Bob/MCP implementation.</div>', unsafe_allow_html=True)
-
-
-def findings():
-    case = st.session_state.case
-    header("Review / Standards", "Findings and reference mapping", "Separate observed signals, machine interpretation and standards-oriented documentation prompts.")
-    left, right = st.columns([1, 1], gap="large")
-    with left:
-        panel("Classification", f'<div class="eyebrow">ANOMALY TYPE</div><h2 style="margin-top:7px">{case["outputs"]["classification"]["type"]}</h2><div class="muted" style="margin-top:6px">Category · {case["outputs"]["classification"]["category"]}</div>')
-        st.markdown('<div class="section-space"></div>', unsafe_allow_html=True)
-        panel("Standards mapping · ASTM E2388", "".join([f'<div class="step"><div class="step-dot self">✓</div><div><div class="step-name">{x}</div></div></div>' for x in case["outputs"]["standards"]["ASTM_E2388"]]))
-    with right:
-        panel("FSL checklist prompts", "".join([f'<div class="step"><div class="step-dot self">✓</div><div><div class="step-name">{x}</div></div></div>' for x in case["outputs"]["standards"]["FSL_checklist"]]))
-        st.markdown('<div class="section-space"></div>', unsafe_allow_html=True)
-        panel("Examiner note", '<div class="muted">Use the standards mapping as a documentation aid. Confirm the applicable laboratory SOP, jurisdictional requirements and the original evidence condition before signing.</div>')
-
-
-def report_review():
-    case = st.session_state.case
-    header("Report Engine / Examiner review", "Court-style report package", "The report is generated for review, amendment and signature — not automatic submission.")
-    left, right = st.columns([1.15, .85], gap="large")
-    with left:
-        panel("Report preview", '<div class="eyebrow">GENERATED ARTIFACT</div><h2 style="margin-top:7px">Expert report · EE-2026-0041</h2><div class="muted" style="margin-top:8px">Includes case identification, automated findings, Bob orchestration trace, standards prompts, and examiner sign-off block.</div>')
-        st.markdown('<div class="section-space"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="note"><b>Required review.</b> Read the interpretive statement, verify the evidence hash and amend any finding that does not reflect your professional judgment.</div>', unsafe_allow_html=True)
-        report = build_report(case)
-        st.download_button("Download court-style PDF", data=report, file_name="eagle_eye_expert_report.pdf", mime="application/pdf", type="primary", use_container_width=True)
-    with right:
-        panel("Sign-off gate", '<div class="muted">The examiner owns the final opinion.</div>')
-        reviewed = st.checkbox("I reviewed the automated findings and orchestration trace.")
-        amended = st.checkbox("I confirmed or amended the interpretive statement.")
-        signed = st.text_input("Examiner signature / initials", placeholder="Type to acknowledge review")
-        if reviewed and amended and signed:
-            st.success("Review gate satisfied. Report is ready for examiner-controlled use.")
+# ---------------------------------------------------------------- step 1
+def intake():
+    st.subheader("Case intake")
+    c, (a, b) = S.case, st.columns(2)
+    no = a.text_input("Case number", c.get("no", ""), placeholder="FSL/2026/0417")
+    ex = b.text_input("Examiner name", c.get("examiner", ""))
+    dt = a.selectbox("Document type", DOC_TYPES, index=pick(DOC_TYPES, c.get("type")))
+    rec = b.date_input("Date received", c.get("date", date.today()))
+    up = st.file_uploader("Suspected document", type=["jpg", "jpeg", "png", "pdf"])
+    if up:
+        S.file = (up.name, up.getvalue())
+    if S.file and S.file[1] and S.file[0].lower().endswith((".jpg", ".jpeg", ".png")):
+        st.image(S.file[1], caption=S.file[0], width=360)
+    elif S.file:
+        st.caption(f"Selected: {S.file[0]}")
+    if st.button("Continue", type="primary"):
+        if not no.strip() or not S.file:
+            st.error("Enter a case number and upload the document to continue.")
         else:
-            st.warning("Complete all review fields before treating the report as signed.")
-        st.markdown('<div class="footer-note">Report Engine status · ready<br>Precedent source · mock return for demonstration</div>', unsafe_allow_html=True)
+            S.case = {"no": no.strip(), "examiner": ex, "type": dt, "date": rec}
+            stale()
+            go(1)
 
 
-def main():
-    init_state()
-    sidebar()
-    page = st.session_state.page
-    if page == "Case workspace": workspace()
-    elif page == "Bob orchestration": orchestration()
-    elif page == "Findings & standards": findings()
-    else: report_review()
+# ---------------------------------------------------------------- step 2
+def observations():
+    o = S.obs
+    st.subheader("Examiner observations")
+    st.caption("Record what the software cannot see.")
+    a, b = st.columns(2)
+    sig = a.selectbox("Signature comparison", SIG, index=pick(SIG, o.get("sig")))
+    sig_n = a.text_area("Signature notes", o.get("sig_n", ""), height=90)
+    seal = a.selectbox("Stamps and seals", SEAL, index=pick(SEAL, o.get("seal")))
+    paper = b.multiselect("Paper anomalies", PAPER, default=o.get("paper", []))
+    ink = b.multiselect("Ink and printing", INK, default=o.get("ink", []))
+    notes = b.text_area("Examiner notes", o.get("notes", ""), height=110)
+    x, y, _ = st.columns([1, 2, 6])
+    if x.button("Back"):
+        go(0)
+    if y.button("Run analysis", type="primary"):
+        S.obs = {"sig": sig, "sig_n": sig_n, "seal": seal, "paper": paper, "ink": ink, "notes": notes}
+        stale()
+        go(2)
 
 
-if __name__ == "__main__":
-    main()
+# ---------------------------------------------------------------- step 3
+def analysis():
+    st.subheader("Automated checks")
+    if S.engine is None:
+        with st.status("Running forensic checks", expanded=True) as stt:
+            for m in SCENARIOS[S.scenario]["modules"]:
+                st.write(f"{m['title']}")
+                time.sleep(0.4)
+            S.engine = mc.run_engine(S.scenario, S.file)
+            stt.update(label="Checks complete", state="complete", expanded=False)
+    if S.engine["status"] != "ok":
+        st.error(f"The analysis engine failed: {S.engine['result']}")
+        return
+    mods = S.engine["result"]
+    checks = [c for m in mods for c in m["checks"]]
+    n = {k: sum(c["status"] == k for c in checks) for k in ("fail", "warn", "pass")}
+    cols = st.columns(4)
+    for col, (lab, val, clr) in zip(cols, [("Checks run", len(checks), "#14182B"), ("Failed", n["fail"], T.STATUS_COL["fail"]),
+                                           ("Warnings", n["warn"], T.STATUS_COL["warn"]), ("Passed", n["pass"], T.STATUS_COL["pass"])]):
+        col.markdown(T.metric(lab, val, clr), unsafe_allow_html=True)
+    left, right = st.columns([3, 2])
+    with left:
+        for tab, m in zip(st.tabs([m["title"] for m in mods]), mods):
+            with tab:
+                st.markdown("".join(T.check_row(c) for c in m["checks"]), unsafe_allow_html=True)
+    with right:
+        st.markdown(T.card("Suspicion by module", T.module_bars(mods)), unsafe_allow_html=True)
+        if S.file and S.file[1] and S.file[0].lower().endswith((".jpg", ".jpeg", ".png")):
+            st.image(S.file[1], caption="Document under examination")
+    st.info("Automated indicators support, and do not replace, examiner judgement.")
+    x, y, _ = st.columns([1, 2, 6])
+    if x.button("Back"):
+        go(1)
+    if y.button("Hand over to Bob", type="primary"):
+        go(3)
+
+
+# ---------------------------------------------------------------- step 4
+def run_pipeline(mods):
+    flags = [c for m in mods for c in m["checks"]]
+    sc, box, calls = S.scenario, st.empty(), []
+    steps = [("classify_anomaly", "Classify anomaly type", lambda: mc.classify_anomaly(sc, S.obs)),
+             ("score_forgery_confidence", "Score forgery confidence", lambda: mc.score_forgery_confidence(sc, flags)),
+             ("map_to_standards", "Map findings to standards", lambda: mc.map_to_standards(sc, mods)),
+             ("fetch_case_precedents", "Find similar cases", lambda: mc.fetch_case_precedents(sc, S.case.get("type", "")))]
+    for tool, label, fn in steps:
+        box.markdown(T.card("Bob is working", T.timeline(calls, (tool, label))), unsafe_allow_html=True)
+        calls.append(fn())
+        if calls[-1]["status"] != "ok":
+            box.markdown(T.card("Bob stopped", T.timeline(calls)), unsafe_allow_html=True)
+            st.error(f"{tool} failed: {calls[-1]['result']}")
+            st.button("Retry")
+            return
+    r = [c["result"] for c in calls]
+    ctx = {"case": S.case, "obs": S.obs, "file": S.file[0], "modules": mods,
+           "cls": r[0], "score": r[1], "std": r[2], "prec": r[3]}
+    box.markdown(T.card("Bob is working", T.timeline(calls, ("generate_expert_report", "Draft expert report"))), unsafe_allow_html=True)
+    calls.append(mc.generate_expert_report(ctx))
+    S.bob = {"calls": calls, "ctx": ctx}
+    st.rerun()
+
+
+def bob():
+    st.subheader("Bob in forensic examiner mode")
+    st.caption("Active skills: " + ", ".join(SKILLS))
+    if S.bob is None:
+        run_pipeline(S.engine["result"])
+        return
+    calls, ctx = S.bob["calls"], S.bob["ctx"]
+    sc, cl = ctx["score"], ctx["cls"]
+    left, right = st.columns([2, 3])
+    with left:
+        st.markdown(T.card("What Bob did", T.timeline(calls)), unsafe_allow_html=True)
+    with right:
+        st.markdown(T.card("Forgery confidence",
+                           f'<div class="ee-big">{sc["score"]} <span class="ee-mut">out of 100</span> &nbsp;{T.pill(sc["level"])}</div>'
+                           + T.scale(sc["score"])), unsafe_allow_html=True)
+        st.markdown(T.card("Classification", f'<div class="ee-big">{cl["type"]}</div><div class="ee-mut">{cl["category"]}</div>'),
+                    unsafe_allow_html=True)
+        st.markdown(T.card("Why this score", "<ul>" + "".join(f"<li>{x}</li>" for x in sc["reasoning"]) + "</ul>"),
+                    unsafe_allow_html=True)
+    a, b = st.columns(2)
+    with a:
+        st.markdown(T.card("Standards (demo data, verify before citing)",
+                           "<ul>" + "".join(f"<li>{x}</li>" for x in ctx["std"]["ASTM_E2388"]) + "</ul>"), unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown("**Lab checklist**")
+            for i, it in enumerate(ctx["std"]["FSL_checklist"]):
+                st.checkbox(it["item"], value=it["done"], key=f"fsl{i}")
+    with b:
+        rows = "".join(f'<div style="margin-bottom:10px"><b>{p["case"]}</b> <span class="ee-mut">relevance {p["relevance"]:.2f}</span>'
+                       f'<div class="ee-bar" style="margin:4px 0"><i style="width:{int(p["relevance"]*100)}%;background:#5B3FD6"></i></div>'
+                       f'<div class="ee-mut">{p["summary"]}</div></div>' for p in ctx["prec"]) or '<div class="ee-mut">No similar cases found.</div>'
+        st.markdown(T.card("Similar cases (demo data, verify before citing)", rows), unsafe_allow_html=True)
+    st.markdown("### Expert opinion report")
+    lines = R.build(ctx)
+    d1, d2, d3, _ = st.columns([1, 1, 1, 3])
+    d1.download_button("Download PDF", calls[-1]["result"], "eagle_eye_expert_report.pdf", "application/pdf", type="primary")
+    d2.download_button("Download Markdown", R.to_markdown(lines), "eagle_eye_expert_report.md")
+    if d3.button("Start new case"):
+        reset()
+    st.markdown(R.to_html(lines), unsafe_allow_html=True)
+
+
+[intake, observations, analysis, bob][S.step]()
