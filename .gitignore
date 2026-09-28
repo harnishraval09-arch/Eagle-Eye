@@ -40,3 +40,16 @@ tmp/
 *.docx.test
 
 # Note: mcp-server/node.exe is intentionally tracked for bundled runtime portability
+
+# Bundled Node.js runtime (install Node.js from https://nodejs.org)
+mcp-server/node.exe
+mcp-server/npm
+mcp-server/npm.cmd
+mcp-server/npm.ps1
+mcp-server/npx
+mcp-server/npx.cmd
+mcp-server/npx.ps1
+mcp-server/corepack
+mcp-server/corepack.cmd
+mcp-server/nodevars.bat
+mcp-server/install_tools.bat
