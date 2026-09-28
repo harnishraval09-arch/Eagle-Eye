@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "eagleeye-forensics": {
+      "command": "node",
+      "args": ["mcp-server/server.js"],
+      "cwd": "${workspaceFolder}",
+      "alwaysAllow": [
+        "classify_anomaly",
+        "score_forgery_confidence",
+        "map_to_standards",
+        "fetch_case_precedents"
+      ]
+    }
+  }
+}

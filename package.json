@@ -1,0 +1,19 @@
+{
+  "name": "eagleeye-forensics-mcp",
+  "version": "1.0.0",
+  "description": "EagleEye Forensic Document Analysis — MCP Server + HTTP API",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "api": "node api.js",
+    "dev": "node api.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "zod": "^3.22.0"
+  }
+}

@@ -1,0 +1,26 @@
+EagleEye — Demo Video
+=====================
+
+Demo video URL: [ADD YOUR VIDEO URL HERE BEFORE SUBMISSION]
+
+Suggested hosting platforms:
+  - YouTube (set to Unlisted for hackathon submission)
+  - Loom (free screen recording)
+  - IBM Box
+
+Recommended video length: 4–5 minutes
+
+Video script outline:
+  0:00 - 0:30  Problem statement — real COVID certificate forgery, Telangana 2021
+  0:30 - 2:00  Bob forensic-examiner mode demo
+               · Switch mode, load skills
+               · Paste sample-case.json
+               · Watch Bob call classify_anomaly, score_forgery_confidence,
+                 map_to_standards, fetch_case_precedents
+               · View generated 7-section court report
+  2:00 - 3:30  Web dashboard demo
+               · Upload & Detect — drop a PDF, see live analysis
+               · New Case form — submit observations, get result card
+               · Expert Report page — Export Court PDF
+  3:30 - 4:30  Architecture walkthrough — system diagram
+  4:30 - 5:00  Standards compliance callout — ASTM E2388 + IEA §45

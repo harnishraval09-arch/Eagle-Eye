@@ -1,0 +1,28 @@
+EagleEye — Live Demo URL
+========================
+
+Live demo URL: [ADD YOUR HOSTED URL HERE BEFORE SUBMISSION]
+
+Local development URL: http://localhost:3001
+  Prerequisites: cd mcp-server && node api.js
+
+Deployment options for a public demo:
+  1. IBM Code Engine
+     - Build the Docker image from the repo
+     - Set PORT env var to the assigned port
+
+  2. Railway.app (free tier)
+     - Connect GitHub repo
+     - Set start command: cd mcp-server && node api.js
+     - Set PORT env var
+
+  3. Render.com (free tier)
+     - Web Service → connect repo
+     - Build command: cd mcp-server && npm install
+     - Start command: cd mcp-server && node api.js
+
+  4. Any Node.js v18+ VPS or cloud instance
+     - Clone repo, npm install, node api.js
+
+Required environment variable:
+  PORT=<assigned port>   (defaults to 3001 if not set)

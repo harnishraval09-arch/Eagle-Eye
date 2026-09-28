@@ -1,0 +1,174 @@
+# ============================================================
+# EagleEye — GitHub Actions Validation Workflow
+# Runs on every push and pull request to main
+# ============================================================
+
+name: Validate EagleEye
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  validate:
+    name: Validate Project Structure & Syntax
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Node.js setup ──────────────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── Install dependencies ───────────────────────────────────────────────
+      - name: Install dependencies
+        run: npm install
+        working-directory: mcp-server
+
+      # ── Validate JavaScript syntax ─────────────────────────────────────────
+      - name: Check syntax — forensics.js
+        run: node --check forensics.js
+        working-directory: mcp-server
+
+      - name: Check syntax — server.js
+        run: node --check server.js
+        working-directory: mcp-server
+
+      - name: Check syntax — api.js
+        run: node --check api.js
+        working-directory: mcp-server
+
+      # ── Validate required submission files ────────────────────────────────
+      - name: Check required submission files exist
+        run: |
+          required_files=(
+            "submission.yaml"
+            "README.md"
+            "CONTRIBUTING.md"
+            ".gitignore"
+            ".env.example"
+            "src/README.md"
+            "docs/problem-statement.md"
+            "docs/solution-overview.md"
+            "docs/architecture.md"
+            "docs/setup-guide.md"
+            "demo/demo-video-link.txt"
+            "demo/live-demo-url.txt"
+            "demo/README.md"
+            ".github/workflows/validate.yml"
+            ".bob/custom_modes.yaml"
+            ".bob/mcp.json"
+            "mcp-server/forensics.js"
+            "mcp-server/server.js"
+            "mcp-server/api.js"
+            "mcp-server/package.json"
+            "cases/sample-case.json"
+            "reports/EE-2024-001-report.md"
+            "ui/index.html"
+          )
+
+          missing=0
+          for f in "${required_files[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "MISSING: $f"
+              missing=$((missing+1))
+            else
+              echo "OK: $f"
+            fi
+          done
+
+          if [ $missing -gt 0 ]; then
+            echo ""
+            echo "ERROR: $missing required file(s) missing"
+            exit 1
+          fi
+
+          echo ""
+          echo "All required files present."
+
+      # ── Validate YAML syntax ───────────────────────────────────────────────
+      - name: Validate submission.yaml
+        run: |
+          python3 -c "
+          import yaml, sys
+          with open('submission.yaml') as f:
+              data = yaml.safe_load(f)
+          required = ['project', 'team', 'solution', 'bob_features_used', 'run']
+          missing = [k for k in required if k not in data]
+          if missing:
+              print(f'Missing keys in submission.yaml: {missing}')
+              sys.exit(1)
+          print('submission.yaml is valid')
+          "
+
+      # ── Validate Bob configuration ────────────────────────────────────────
+      - name: Validate .bob/custom_modes.yaml
+        run: |
+          python3 -c "
+          import yaml, sys
+          with open('.bob/custom_modes.yaml') as f:
+              data = yaml.safe_load(f)
+          if 'customModes' not in data or not data['customModes']:
+              print('ERROR: customModes missing or empty')
+              sys.exit(1)
+          mode = data['customModes'][0]
+          for field in ['slug', 'name', 'roleDefinition', 'customInstructions']:
+              if field not in mode:
+                  print(f'ERROR: missing field: {field}')
+                  sys.exit(1)
+          print(f'custom_modes.yaml valid — mode slug: {mode[\"slug\"]}')
+          "
+
+      - name: Validate .bob/mcp.json
+        run: |
+          python3 -c "
+          import json, sys
+          with open('.bob/mcp.json') as f:
+              data = json.load(f)
+          if 'mcpServers' not in data:
+              print('ERROR: mcpServers key missing')
+              sys.exit(1)
+          print(f'mcp.json valid — servers: {list(data[\"mcpServers\"].keys())}')
+          "
+
+      # ── Validate sample case JSON ─────────────────────────────────────────
+      - name: Validate cases/sample-case.json
+        run: |
+          python3 -c "
+          import json, sys
+          with open('cases/sample-case.json') as f:
+              data = json.load(f)
+          for field in ['case_id', 'document_type', 'submitted_by', 'observations']:
+              if field not in data:
+                  print(f'ERROR: missing field: {field}')
+                  sys.exit(1)
+          print(f'sample-case.json valid — case_id: {data[\"case_id\"]}')
+          "
+
+      # ── API health check ──────────────────────────────────────────────────
+      - name: Start API server and health check
+        run: |
+          node api.js &
+          SERVER_PID=$!
+          sleep 3
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/health)
+          kill $SERVER_PID 2>/dev/null || true
+          if [ "$STATUS" != "200" ]; then
+            echo "Health check failed — HTTP $STATUS"
+            exit 1
+          fi
+          echo "API health check passed — HTTP 200"
+        working-directory: mcp-server
+
+      # ── Summary ───────────────────────────────────────────────────────────
+      - name: Validation summary
+        run: |
+          echo "EagleEye validation complete."
+          echo "All files present, syntax valid, API healthy."

@@ -1,0 +1,84 @@
+---
+# ============================================================
+# EagleEye — AI-Powered Document Forgery Detection Assistant
+# IBM Bob Hackathon Submission Metadata
+# ============================================================
+
+project:
+  name: "EagleEye"
+  tagline: "AI-Powered Document Forgery Detection & Court-Admissible Report Generation"
+  version: "1.0.0"
+  category: "AI-Powered Workflows"
+  domain: "Forensic Science / Legal / Public Safety"
+
+team:
+  name: "Team EagleEye"
+  track: "Legal & Forensic AI"
+
+problem_statement:
+  title: "Document Forgery is a Crisis-Scale Problem in India"
+  real_cases:
+    - "Fake COVID vaccination certificates sold across Telangana & UP — 2021"
+    - "3,000+ fake university degree cases — Education Ministry report, 2022"
+    - "Forged property deeds and altered FIRs presented as evidence in Indian courts"
+  current_gap: >
+    Forensic document examiners lack structured AI assistance. Examinations are
+    manual, inconsistent across labs, and final reports vary in format, making
+    court admissibility uncertain.
+
+solution:
+  description: >
+    EagleEye is a Bob-powered guided forensic examination workflow. An examiner
+    submits structured observations about a suspected forged document. EagleEye
+    classifies each anomaly (TYP/SIG/PAP/INK/DIG/SEA), calculates a forgery
+    confidence score (0-100%), maps findings to ASTM E2388 and FSL Protocol
+    standards, retrieves relevant Indian court precedents, and generates a
+    complete 7-section expert opinion report admissible under Indian Evidence
+    Act Section 45.
+
+bob_features_used:
+  - "Custom Mode: forensic-examiner (roleDefinition + customInstructions + file permissions)"
+  - "MCP Server: eagleeye-forensics (4 tools via STDIO transport)"
+  - "Skills: questioned-documents, digital-forgery-patterns, indian-evidence-act, court-report-format"
+  - "Mode Rules: examination-protocol.md, report-format.md"
+
+technical_stack:
+  runtime: "Node.js v24"
+  backend: "Express.js HTTP API (port 3001)"
+  frontend: "Vanilla HTML/CSS/JS — dark-themed forensic dashboard"
+  mcp_transport: "STDIO"
+  no_external_ai: true
+  standards:
+    - "ASTM E2388 — Forensic Document Examination"
+    - "FSL Protocols 2.1–7.2"
+    - "Indian Evidence Act 1872, Section 45"
+
+anomaly_types:
+  TYP: "Typography / Printing Anomaly"
+  SIG: "Signature / Handwriting Mismatch"
+  PAP: "Paper / Substrate Anomaly"
+  INK: "Ink / Printing Process Anomaly"
+  DIG: "Digital Metadata / PDF Structure Anomaly"
+  SEA: "Seal / Stamp / Impression Anomaly"
+
+case_precedents_indexed:
+  - "State of Telangana v. Raju & Ors (2022)"
+  - "UGC v. Fake Degree Syndicate, Delhi HC (2022)"
+  - "Ram Prasad v. State of UP, SC (2019)"
+  - "State of Maharashtra v. Pradeep Kumar Sharma, Bombay HC (2021)"
+  - "Shashi Kumar Banerjee v. Subodh Kumar Banerjee, SC (1964)"
+
+run:
+  step1: "cd mcp-server && npm.cmd install --prefix .. --cache %TEMP%\\npm-cache"
+  step2: "cd mcp-server && node api.js"
+  step3: "Open http://localhost:3001 in browser"
+  bob_mode: "Switch to forensic-examiner mode in Bob for guided AI examination"
+
+artifacts:
+  source:        "mcp-server/"
+  frontend:      "ui/index.html"
+  bob_config:    ".bob/"
+  sample_case:   "cases/sample-case.json"
+  sample_report: "reports/EE-2024-001-report.md"
+  docs:          "docs/"
+  demo:          "demo/"

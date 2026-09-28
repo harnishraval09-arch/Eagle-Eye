@@ -1,0 +1,1838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EagleEye — Forensic Document Examination System</title>
+<style>
+/* ── RESET & TOKENS ─────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080a0f;
+  --s1:#0e1117;
+  --s2:#141820;
+  --s3:#1c2130;
+  --border:#1f2535;
+  --border2:#263042;
+  --text:#dde1ec;
+  --text2:#a8b0c8;
+  --muted:#5c6680;
+  --accent:#3d7fff;
+  --accent-l:rgba(61,127,255,.14);
+  --accent-g:rgba(61,127,255,.06);
+  --red:#e04f4f;
+  --red-l:rgba(224,79,79,.14);
+  --orange:#d9762b;
+  --orange-l:rgba(217,118,43,.14);
+  --yellow:#c49b1a;
+  --yellow-l:rgba(196,155,26,.14);
+  --green:#2ea86b;
+  --green-l:rgba(46,168,107,.14);
+  --purple:#7c5ce8;
+  --r:6px;
+  --r2:10px;
+}
+html{font-size:13px}
+body{font-family:-apple-system,"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh;overflow:hidden}
+
+/* ── LAYOUT ──────────────────────────────────────────────────── */
+.shell{display:flex;height:100vh}
+
+/* ── SIDEBAR ────────────────────────────────────────────────── */
+.sidebar{
+  width:224px;min-width:224px;
+  background:var(--s1);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.logo{
+  padding:20px 18px 16px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+}
+.logo-icon{
+  width:36px;height:36px;
+  background:linear-gradient(135deg,#1a3a6e 0%,#0d2249 100%);
+  border:1px solid #2a4a8e;
+  border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;flex-shrink:0;
+}
+.logo-text h1{font-size:14px;font-weight:700;color:var(--text);letter-spacing:.3px}
+.logo-text p{font-size:10px;color:var(--muted);margin-top:1px;letter-spacing:.3px}
+
+.nav-group-label{
+  padding:16px 18px 6px;
+  font-size:9.5px;font-weight:700;letter-spacing:1.4px;
+  text-transform:uppercase;color:var(--muted);
+}
+.nav-item{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 18px;cursor:pointer;
+  font-size:12.5px;color:var(--text2);
+  border-left:2px solid transparent;
+  transition:all .12s;position:relative;
+}
+.nav-item:hover{background:var(--s2);color:var(--text)}
+.nav-item.active{background:var(--accent-l);color:var(--accent);border-left-color:var(--accent)}
+.nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:.7}
+.nav-item.active svg{opacity:1}
+.nav-badge{
+  margin-left:auto;font-size:9.5px;font-weight:700;
+  background:var(--red);color:#fff;
+  padding:1px 6px;border-radius:10px;
+}
+.nav-dot{
+  margin-left:auto;width:6px;height:6px;
+  border-radius:50%;background:var(--red);
+}
+
+.case-widget{
+  margin:12px;padding:13px;
+  background:var(--s2);
+  border:1px solid var(--border);
+  border-radius:var(--r2);
+}
+.case-widget .cw-label{font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
+.case-widget .cw-id{font-size:13px;font-weight:700;color:var(--accent);margin-top:3px}
+.case-widget .cw-type{font-size:11px;color:var(--text2);margin-top:1px}
+.case-widget .cw-verdict{
+  margin-top:10px;padding:5px 10px;
+  background:var(--red-l);border:1px solid rgba(224,79,79,.4);
+  border-radius:5px;font-size:10.5px;font-weight:700;
+  color:var(--red);text-align:center;letter-spacing:.4px;
+}
+.case-widget .cw-score{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-top:8px;
+}
+.case-widget .cw-score-num{font-size:22px;font-weight:800;color:var(--red)}
+.case-widget .cw-score-lbl{font-size:9px;color:var(--muted);text-align:right;line-height:1.4}
+
+/* ── MAIN ────────────────────────────────────────────────────── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+
+/* ── TOPBAR ──────────────────────────────────────────────────── */
+.topbar{
+  height:50px;
+  background:var(--s1);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;
+  padding:0 24px;gap:0;
+  flex-shrink:0;
+}
+.topbar-breadcrumb{display:flex;align-items:center;gap:6px;font-size:12px}
+.topbar-breadcrumb .bc-root{color:var(--muted)}
+.topbar-breadcrumb .bc-sep{color:var(--border2)}
+.topbar-breadcrumb .bc-page{color:var(--text);font-weight:600}
+.topbar-spacer{flex:1}
+.topbar-status{
+  display:flex;align-items:center;gap:8px;
+  padding:5px 12px;
+  background:var(--red-l);
+  border:1px solid rgba(224,79,79,.35);
+  border-radius:var(--r);
+}
+.topbar-status .ts-dot{width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0}
+.topbar-status .ts-text{font-size:11px;font-weight:700;color:var(--red);letter-spacing:.3px}
+.topbar-divider{width:1px;height:24px;background:var(--border);margin:0 16px}
+.topbar-meta{font-size:11px;color:var(--muted)}
+
+/* ── PAGE SHELL ──────────────────────────────────────────────── */
+.page{display:none;flex:1;overflow-y:auto;padding:22px 24px}
+.page.active{display:block}
+.page-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px}
+.page-sub{font-size:11.5px;color:var(--muted);margin-bottom:20px}
+
+/* ── CARDS ───────────────────────────────────────────────────── */
+.card{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-radius:var(--r2);
+  overflow:hidden;
+  margin-bottom:16px;
+}
+.card-header{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 18px;
+  border-bottom:1px solid var(--border);
+  background:var(--s2);
+}
+.card-header-icon{
+  width:26px;height:26px;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;flex-shrink:0;
+}
+.card-header-icon.blue{background:var(--accent-l);color:var(--accent)}
+.card-header-icon.red{background:var(--red-l);color:var(--red)}
+.card-header-icon.orange{background:var(--orange-l);color:var(--orange)}
+.card-header-icon.green{background:var(--green-l);color:var(--green)}
+.card-header-icon.purple{background:rgba(124,92,232,.15);color:var(--purple)}
+.card-title{font-size:12.5px;font-weight:700;color:var(--text)}
+.card-sub{font-size:11px;color:var(--muted);margin-left:auto}
+.card-body{padding:18px}
+.card-body.tight{padding:0}
+
+/* ── STAT GRID ───────────────────────────────────────────────── */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stat-card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:var(--r2);padding:16px 18px;
+  position:relative;overflow:hidden;
+}
+.stat-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+}
+.stat-card.v-red::before{background:var(--red)}
+.stat-card.v-orange::before{background:var(--orange)}
+.stat-card.v-blue::before{background:var(--accent)}
+.stat-card.v-green::before{background:var(--green)}
+.stat-label{font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.stat-value{font-size:26px;font-weight:800;margin-top:6px;line-height:1}
+.stat-card.v-red .stat-value{color:var(--red)}
+.stat-card.v-orange .stat-value{color:var(--orange)}
+.stat-card.v-blue .stat-value{color:var(--accent)}
+.stat-card.v-green .stat-value{color:var(--green)}
+.stat-sub{font-size:10.5px;color:var(--muted);margin-top:5px}
+
+/* ── GAUGE ───────────────────────────────────────────────────── */
+.gauge-row{display:grid;grid-template-columns:190px 1fr;gap:14px;margin-bottom:16px}
+.gauge-card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:var(--r2);padding:20px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.gauge-wrap{position:relative;width:144px;height:82px;margin-bottom:12px}
+.gauge-wrap svg{position:absolute;top:0;left:0}
+.gauge-num{
+  position:absolute;bottom:2px;left:0;right:0;
+  text-align:center;font-size:28px;font-weight:900;color:var(--red);line-height:1;
+}
+.gauge-pct{position:absolute;bottom:-2px;right:28px;font-size:12px;font-weight:700;color:var(--red)}
+.gauge-verdict{font-size:10.5px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.8px;text-align:center}
+.gauge-std{font-size:9.5px;color:var(--muted);text-align:center;margin-top:3px}
+
+/* ── BAR BREAKDOWN ───────────────────────────────────────────── */
+.bk-card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:var(--r2);padding:18px 20px;
+}
+.bk-title{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+.bk-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.bk-row:last-child{margin-bottom:0}
+.bk-label{font-size:11.5px;color:var(--text);width:136px;flex-shrink:0;display:flex;align-items:center;gap:7px}
+.bk-track{flex:1;background:var(--s3);border-radius:3px;height:6px;overflow:hidden}
+.bk-fill{height:100%;border-radius:3px}
+.bk-pts{font-size:10.5px;color:var(--muted);width:80px;text-align:right;flex-shrink:0}
+
+/* ── BADGES ──────────────────────────────────────────────────── */
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;font-family:monospace;letter-spacing:.3px}
+.badge-TYP{background:rgba(61,127,255,.15);color:#4f8ef7}
+.badge-SIG{background:rgba(124,92,232,.15);color:#9b7cf7}
+.badge-PAP{background:rgba(46,168,107,.15);color:#3cb97a}
+.badge-INK{background:rgba(196,155,26,.15);color:#c9a227}
+.badge-DIG{background:rgba(224,79,79,.15);color:#e05252}
+.badge-SEA{background:rgba(217,118,43,.15);color:#d9762b}
+
+.sev{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700}
+.sev::before{content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.sev-Critical{background:var(--red-l);color:var(--red);border:1px solid rgba(224,79,79,.3)}.sev-Critical::before{background:var(--red)}
+.sev-High{background:var(--orange-l);color:var(--orange);border:1px solid rgba(217,118,43,.3)}.sev-High::before{background:var(--orange)}
+.sev-Medium{background:var(--yellow-l);color:var(--yellow);border:1px solid rgba(196,155,26,.3)}.sev-Medium::before{background:var(--yellow)}
+.sev-Low{background:var(--green-l);color:var(--green);border:1px solid rgba(46,168,107,.3)}.sev-Low::before{background:var(--green)}
+
+/* ── FINDINGS TABLE ──────────────────────────────────────────── */
+.filter-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.fbtn{
+  padding:4px 11px;border-radius:5px;
+  border:1px solid var(--border2);
+  background:var(--s1);color:var(--muted);
+  font-size:10.5px;font-weight:600;cursor:pointer;
+  transition:all .12s;
+}
+.fbtn:hover{border-color:var(--accent);color:var(--accent)}
+.fbtn.active{background:var(--accent-l);border-color:var(--accent);color:var(--accent)}
+.fbtn.fc.active{background:var(--red-l);border-color:rgba(224,79,79,.4);color:var(--red)}
+.fbtn.fh.active{background:var(--orange-l);border-color:rgba(217,118,43,.4);color:var(--orange)}
+.fbtn.fm.active{background:var(--yellow-l);border-color:rgba(196,155,26,.4);color:var(--yellow)}
+
+.ftable{width:100%;border-collapse:collapse}
+.ftable thead tr{background:var(--s2)}
+.ftable th{
+  text-align:left;font-size:9.5px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.9px;color:var(--muted);
+  padding:10px 14px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--s2);z-index:1;
+}
+.ftable td{padding:11px 14px;border-bottom:1px solid var(--border);font-size:11.5px;vertical-align:top}
+.ftable tbody tr:last-child td{border-bottom:none}
+.ftable tbody tr:hover td{background:var(--s2)}
+.ftable .row-num{color:var(--muted);font-size:10.5px;font-family:monospace}
+.ftable .obs{color:var(--text);line-height:1.55;max-width:360px}
+.ftable .std{color:var(--muted);font-size:10.5px}
+
+/* ── REPORT PAGE ─────────────────────────────────────────────── */
+.meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+.meta-field .mf-key{font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.meta-field .mf-val{font-size:12.5px;color:var(--text);font-weight:500;margin-top:2px}
+
+.opinion-block{
+  background:var(--red-l);
+  border:1px solid rgba(224,79,79,.3);
+  border-left:3px solid var(--red);
+  border-radius:var(--r);
+  padding:16px 18px;margin-bottom:16px;
+}
+.opinion-block .ob-hd{font-size:9.5px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.9px;margin-bottom:8px}
+.opinion-block p{font-size:12.5px;color:var(--text);line-height:1.75}
+.opinion-block p+p{margin-top:8px}
+
+.prec-item{
+  border-left:3px solid var(--accent);
+  padding:12px 16px;
+  background:var(--s2);
+  border-radius:0 var(--r) var(--r) 0;
+  margin-bottom:10px;
+}
+.prec-item .pi-name{font-size:12.5px;font-weight:700;color:var(--accent)}
+.prec-item .pi-court{font-size:10.5px;color:var(--muted);margin-top:1px}
+.prec-item .pi-detail{font-size:11.5px;color:var(--text2);margin-top:7px;line-height:1.6}
+.ipc-tag{display:inline-block;padding:1px 7px;background:var(--accent-l);color:var(--accent);border-radius:3px;font-size:9.5px;font-weight:600;margin-right:4px;margin-top:5px}
+
+.decl-box{
+  background:var(--s2);border:1px solid var(--border);
+  border-radius:var(--r);padding:18px 20px;
+  font-family:"Courier New",monospace;
+  font-size:11.5px;color:var(--text2);
+  line-height:2;white-space:pre-wrap;
+}
+
+/* ── UPLOAD PAGE ─────────────────────────────────────────────── */
+.upload-zone{
+  border:2px dashed var(--border2);
+  border-radius:var(--r2);
+  padding:40px 20px;
+  text-align:center;
+  cursor:pointer;
+  transition:all .2s;
+  background:var(--s1);
+  position:relative;
+}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:var(--accent-g)}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.upload-icon{font-size:32px;margin-bottom:12px;opacity:.5}
+.upload-title{font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px}
+.upload-sub{font-size:11.5px;color:var(--muted);line-height:1.6}
+.upload-formats{
+  display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px;
+}
+.fmt-tag{padding:3px 10px;border:1px solid var(--border2);border-radius:4px;font-size:10px;font-weight:600;color:var(--muted);font-family:monospace}
+
+.upload-progress{display:none;margin-top:20px}
+.progress-bar{height:4px;background:var(--s3);border-radius:2px;overflow:hidden;margin-top:8px}
+.progress-fill{height:100%;background:var(--accent);border-radius:2px;width:0%;transition:width .3s}
+.progress-label{font-size:11px;color:var(--text2);display:flex;justify-content:space-between}
+
+.scan-steps{display:none;margin-top:20px}
+.scan-step{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 14px;
+  border-radius:var(--r);margin-bottom:8px;
+  background:var(--s2);border:1px solid var(--border);
+  font-size:12px;
+}
+.scan-step .ss-icon{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+.scan-step .ss-icon.pending{background:var(--s3);color:var(--muted)}
+.scan-step .ss-icon.running{background:var(--accent-l);color:var(--accent)}
+.scan-step .ss-icon.done{background:var(--green-l);color:var(--green)}
+.scan-step .ss-label{flex:1;color:var(--text2)}
+.scan-step.active .ss-label{color:var(--text)}
+.scan-step.done-step .ss-label{color:var(--green)}
+.scan-step .ss-status{font-size:10px;color:var(--muted)}
+.scan-step.done-step .ss-status{color:var(--green)}
+
+.detection-result{display:none;margin-top:20px}
+
+/* ── NEW CASE FORM ────────────────────────────────────────────── */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.form-row.trio{grid-template-columns:1fr 1fr 1fr}
+.form-row.solo{grid-template-columns:1fr}
+.form-field{display:flex;flex-direction:column;gap:5px}
+.form-label{font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.form-label span{color:var(--red);margin-left:2px}
+.form-input,.form-select,.form-textarea{
+  background:var(--s2);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  padding:8px 11px;
+  font-size:12.5px;color:var(--text);
+  outline:none;
+  transition:border-color .15s,box-shadow .15s;
+  font-family:inherit;width:100%;
+}
+.form-input:focus,.form-select:focus,.form-textarea:focus{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(61,127,255,.12);
+}
+.form-input.error{border-color:var(--red)}
+.form-input::placeholder{color:var(--muted)}
+.form-textarea{resize:vertical;min-height:72px}
+.form-select option{background:var(--s2)}
+.form-error{font-size:10px;color:var(--red);margin-top:3px;display:none}
+
+.obs-accordion{margin-bottom:10px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.obs-header{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 15px;background:var(--s2);cursor:pointer;
+  font-size:12px;font-weight:600;color:var(--text);
+  border-bottom:1px solid transparent;
+  transition:background .12s;
+  user-select:none;
+}
+.obs-header:hover{background:var(--s3)}
+.obs-header.open{border-bottom-color:var(--border)}
+.obs-header .oh-toggle{margin-left:auto;font-size:10px;color:var(--muted);transition:transform .2s}
+.obs-header.open .oh-toggle{transform:rotate(90deg)}
+.obs-body{display:none;padding:14px 15px;background:var(--s1)}
+.obs-body.open{display:block}
+.obs-item{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
+.obs-item:last-child{margin-bottom:0}
+.obs-chk{width:15px;height:15px;margin-top:3px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+.obs-fields{flex:1;display:flex;flex-direction:column;gap:5px}
+.obs-field-label{font-size:10px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+
+.form-divider{height:1px;background:var(--border);margin:20px 0}
+.form-section-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+
+/* ── SEVERITY LEGEND ─────────────────────────────────────────── */
+.sev-legend{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.sev-legend-item{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--text2)}
+.sev-legend-dot{width:8px;height:8px;border-radius:50%}
+
+/* ── BUTTONS ─────────────────────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:8px 18px;border-radius:var(--r);
+  font-size:12.5px;font-weight:600;cursor:pointer;
+  transition:all .15s;border:1px solid transparent;
+  font-family:inherit;
+}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{background:#2d6de8;border-color:#2d6de8}
+.btn-secondary{background:var(--s2);color:var(--text2);border-color:var(--border)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-danger{background:var(--red-l);color:var(--red);border-color:rgba(224,79,79,.3)}
+.btn-danger:hover{background:var(--red);color:#fff}
+.btn-sm{padding:5px 12px;font-size:11px}
+.btn-row{display:flex;gap:8px;align-items:center;padding-top:6px}
+
+/* ── SECTION BLOCK ───────────────────────────────────────────── */
+.sec-block{background:var(--s1);border:1px solid var(--border);border-radius:var(--r2);margin-bottom:14px;overflow:hidden}
+.sec-hd{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--s2)}
+.sec-num{font-size:9.5px;font-weight:700;color:var(--accent);background:var(--accent-l);padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.5px}
+.sec-title{font-size:12.5px;font-weight:700;color:var(--text)}
+.sec-bd{padding:15px 18px;font-size:12.5px;color:var(--text2);line-height:1.75}
+.sec-bd p{margin-bottom:8px}.sec-bd p:last-child{margin:0}
+
+/* ── TOAST ───────────────────────────────────────────────────── */
+.toast{
+  position:fixed;bottom:20px;right:20px;
+  background:var(--green);color:#fff;
+  padding:11px 18px;border-radius:var(--r);
+  font-size:12px;font-weight:600;
+  transform:translateY(60px);opacity:0;
+  transition:all .3s;z-index:9999;
+}
+.toast.show{transform:translateY(0);opacity:1}
+
+/* ── SCROLLBAR ───────────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+/* ── EMPTY STATE ─────────────────────────────────────────────── */
+.empty-state{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty-state p{margin-top:8px;font-size:12px}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+<!-- ════════════════════════════════ SIDEBAR ════════════════════════════════ -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-icon">🦅</div>
+    <div class="logo-text">
+      <h1>EagleEye</h1>
+      <p>FORENSIC EXAMINATION</p>
+    </div>
+  </div>
+
+  <div class="nav-group-label">Workspace</div>
+  <div class="nav-item active" data-page="overview">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+    Overview
+  </div>
+  <div class="nav-item" data-page="findings">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5"/><path d="M11 11l3 3"/></svg>
+    Findings
+    <span class="nav-badge">18</span>
+  </div>
+  <div class="nav-item" data-page="report">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2h7l3 3v9H3z"/><path d="M10 2v3h3"/><path d="M5 8h6M5 11h4"/></svg>
+    Expert Report
+  </div>
+
+  <div class="nav-group-label" style="margin-top:4px">Examination</div>
+  <div class="nav-item" data-page="upload">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v8M5 5l3-3 3 3"/><path d="M2 11v1a2 2 0 002 2h8a2 2 0 002-2v-1"/></svg>
+    Upload &amp; Detect
+    <span class="nav-dot"></span>
+  </div>
+  <div class="nav-item" data-page="newcase">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v6M5 8h6"/></svg>
+    New Case
+  </div>
+
+  <div style="flex:1"></div>
+
+  <div class="case-widget">
+    <div class="cw-label">Active Case</div>
+    <div class="cw-id">EE-2024-001</div>
+    <div class="cw-type">COVID Vaccination Certificate</div>
+    <div class="cw-verdict">HIGH CONFIDENCE FORGERY</div>
+    <div class="cw-score">
+      <div class="cw-score-num">92%</div>
+      <div class="cw-score-lbl">Confidence<br>Score</div>
+    </div>
+  </div>
+  <div style="height:10px"></div>
+</aside>
+
+<!-- ════════════════════════════════ MAIN ════════════════════════════════ -->
+<div class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar" id="topbar">
+    <div class="topbar-breadcrumb">
+      <span class="bc-root">EagleEye</span>
+      <span class="bc-sep">/</span>
+      <span class="bc-page" id="bc-page">Overview</span>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-meta" id="topbar-meta">Case EE-2024-001 &nbsp;·&nbsp; TG/CYB/2024/0042</div>
+    <div class="topbar-divider"></div>
+    <div class="topbar-status">
+      <div class="ts-dot"></div>
+      <div class="ts-text">HIGH CONFIDENCE FORGERY</div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: OVERVIEW ══════════════════════════════════════════════════ -->
+  <div class="page active" id="page-overview">
+
+    <div class="page-title">Case Overview</div>
+    <div class="page-sub">EE-2024-001 · COVID Vaccination Certificate · Submitted 15 Jan 2024 · Dr. A. Sharma, CDFE</div>
+
+    <div class="stat-grid">
+      <div class="stat-card v-red">
+        <div class="stat-label">Forgery Confidence</div>
+        <div class="stat-value">92%</div>
+        <div class="stat-sub">High Confidence Forgery</div>
+      </div>
+      <div class="stat-card v-orange">
+        <div class="stat-label">Anomalies Detected</div>
+        <div class="stat-value">18</div>
+        <div class="stat-sub">6 of 6 categories affected</div>
+      </div>
+      <div class="stat-card v-red">
+        <div class="stat-label">Critical Findings</div>
+        <div class="stat-value">5</div>
+        <div class="stat-sub">SIG ×2 · DIG ×3</div>
+      </div>
+      <div class="stat-card v-blue">
+        <div class="stat-label">Standards Applied</div>
+        <div class="stat-value">8</div>
+        <div class="stat-sub">ASTM E2388 · FSL Protocols</div>
+      </div>
+    </div>
+
+    <div class="gauge-row">
+      <div class="gauge-card">
+        <div class="gauge-wrap">
+          <svg width="144" height="82" viewBox="0 0 144 82">
+            <path d="M 14 78 A 58 58 0 0 1 130 78" fill="none" stroke="#1c2130" stroke-width="10" stroke-linecap="round"/>
+            <path d="M 14 78 A 58 58 0 0 1 130 78" fill="none" stroke="#e04f4f" stroke-width="10" stroke-linecap="round" stroke-dasharray="182" stroke-dashoffset="14.5"/>
+          </svg>
+          <div class="gauge-num">92</div>
+          <div class="gauge-pct">%</div>
+        </div>
+        <div class="gauge-verdict">High Confidence Forgery</div>
+        <div class="gauge-std">ASTM E2388 · FSL Protocol Suite</div>
+      </div>
+
+      <div class="bk-card">
+        <div class="bk-title">Weighted Anomaly Contribution by Category</div>
+        <div class="bk-row">
+          <div class="bk-label"><span class="badge badge-DIG">DIG</span> Digital Metadata</div>
+          <div class="bk-track"><div class="bk-fill" style="width:100%;background:#e04f4f"></div></div>
+          <div class="bk-pts">135 pts &nbsp;<span style="color:var(--red)">3× Critical</span></div>
+        </div>
+        <div class="bk-row">
+          <div class="bk-label"><span class="badge badge-SIG">SIG</span> Signature</div>
+          <div class="bk-track"><div class="bk-fill" style="width:83%;background:#9b7cf7"></div></div>
+          <div class="bk-pts">112.5 pts &nbsp;<span style="color:var(--red)">3× Critical</span></div>
+        </div>
+        <div class="bk-row">
+          <div class="bk-label"><span class="badge badge-TYP">TYP</span> Typography</div>
+          <div class="bk-track"><div class="bk-fill" style="width:53%;background:#4f8ef7"></div></div>
+          <div class="bk-pts">72 pts &nbsp;4× High</div>
+        </div>
+        <div class="bk-row">
+          <div class="bk-label"><span class="badge badge-SEA">SEA</span> Seal / Stamp</div>
+          <div class="bk-track"><div class="bk-fill" style="width:53%;background:#d9762b"></div></div>
+          <div class="bk-pts">72 pts &nbsp;3× High</div>
+        </div>
+        <div class="bk-row">
+          <div class="bk-label"><span class="badge badge-INK">INK</span> Ink / Printing</div>
+          <div class="bk-track"><div class="bk-fill" style="width:36%;background:#c9a227"></div></div>
+          <div class="bk-pts">48 pts &nbsp;2× High</div>
+        </div>
+        <div class="bk-row">
+          <div class="bk-label"><span class="badge badge-PAP">PAP</span> Paper</div>
+          <div class="bk-track"><div class="bk-fill" style="width:22%;background:#2ea86b"></div></div>
+          <div class="bk-pts">30 pts &nbsp;3× Medium</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-block">
+      <div class="sec-hd"><span class="sec-num">§ 1</span><span class="sec-title">Brief Facts</span></div>
+      <div class="sec-bd">
+        <p>The document was submitted by Inspector R. Naidu of the Telangana Cybercrime Unit in connection with Reference No. TG/CYB/2024/0042, relating to suspected use and distribution of a forged COVID-19 vaccination certificate.</p>
+        <p>The examination was requested to determine whether the submitted certificate is a genuine document issued through the Government of India's CoWIN portal (NIC), or whether it has been fabricated or tampered with. A genuine CoWIN certificate was provided by NIC as a reference specimen for comparison.</p>
+      </div>
+    </div>
+
+    <div class="sec-block">
+      <div class="sec-hd"><span class="sec-num">§ 3</span><span class="sec-title">Examination Methods Conducted</span></div>
+      <div class="sec-bd">
+        <p>(a) Visual examination under white light · (b) UV light at 365nm &amp; 254nm · (c) Stereomicroscopy 10×–40× · (d) Paper GSM measurement · (e) Transmitted light watermark verification · (f) Ink spread &amp; printing process analysis · (g) Ink age retention test · (h) Digital metadata extraction via ExifTool v12.6 · (i) PDF structural &amp; XMP history analysis · (j) Digital signature certificate chain verification · (k) Seal impression dimensional comparison · (l) Comparison against genuine CoWIN reference specimen</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ PAGE: FINDINGS ═══════════════════════════════════════════════════ -->
+  <div class="page" id="page-findings">
+
+    <div class="page-title">Anomaly Findings</div>
+    <div class="page-sub">18 anomalies detected across 6 categories · 5 Critical · 11 High · 3 Medium</div>
+
+    <div class="sev-legend">
+      <div class="sev-legend-item"><div class="sev-legend-dot" style="background:var(--red)"></div> Critical — Definitive forgery indicator</div>
+      <div class="sev-legend-item"><div class="sev-legend-dot" style="background:var(--orange)"></div> High — Strong indicator</div>
+      <div class="sev-legend-item"><div class="sev-legend-dot" style="background:var(--yellow)"></div> Medium — Notable anomaly</div>
+    </div>
+
+    <div class="filter-bar" id="filter-bar">
+      <button class="fbtn active" data-f="all">All (18)</button>
+      <button class="fbtn fc" data-f="Critical">Critical (5)</button>
+      <button class="fbtn fh" data-f="High">High (11)</button>
+      <button class="fbtn fm" data-f="Medium">Medium (3)</button>
+      <button class="fbtn" data-f="TYP">TYP</button>
+      <button class="fbtn" data-f="SIG">SIG</button>
+      <button class="fbtn" data-f="PAP">PAP</button>
+      <button class="fbtn" data-f="INK">INK</button>
+      <button class="fbtn" data-f="DIG">DIG</button>
+      <button class="fbtn" data-f="SEA">SEA</button>
+    </div>
+
+    <div class="card" style="margin-bottom:0">
+      <div class="card-body tight">
+        <table class="ftable">
+          <thead>
+            <tr>
+              <th>#</th><th>Code</th><th>Category</th>
+              <th>Observation</th><th>Severity</th><th>Standard Reference</th>
+            </tr>
+          </thead>
+          <tbody id="ftbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ PAGE: REPORT ════════════════════════════════════════════════════ -->
+  <div class="page" id="page-report">
+
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:16px;flex-wrap:wrap">
+      <div>
+        <div class="page-title" style="margin-bottom:2px">Expert Opinion Report</div>
+        <div style="font-size:11.5px;color:var(--muted)">FSL Standard Format · Indian Evidence Act §45 Compliant · Case EE-2024-001</div>
+      </div>
+      <button class="btn btn-primary" onclick="exportReportPDF()" style="flex-shrink:0">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 2h7l3 3v9H3z"/><path d="M10 2v3h3"/><path d="M5 8h6M5 11h4"/></svg>
+        Export Court PDF
+      </button>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-header">
+        <div class="card-header-icon blue">📋</div>
+        <div class="card-title">Report Header</div>
+        <div class="card-sub">EagleEye Forensic Unit · 15 Jan 2024</div>
+      </div>
+      <div class="card-body">
+        <div class="meta-grid">
+          <div class="meta-field"><div class="mf-key">Case Number</div><div class="mf-val">EE-2024-001</div></div>
+          <div class="meta-field"><div class="mf-key">Reference Number</div><div class="mf-val">TG/CYB/2024/0042</div></div>
+          <div class="meta-field"><div class="mf-key">Date of Report</div><div class="mf-val">15 January 2024</div></div>
+          <div class="meta-field"><div class="mf-key">Document Type</div><div class="mf-val">COVID Vaccination Certificate</div></div>
+          <div class="meta-field"><div class="mf-key">Submitted By</div><div class="mf-val">Insp. R. Naidu, Telangana Cybercrime Unit</div></div>
+          <div class="meta-field"><div class="mf-key">Examined By</div><div class="mf-val">Dr. A. Sharma, M.Sc. Forensic Science, CDFE</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="opinion-block">
+      <div class="ob-hd">§ 5 — Expert Opinion &nbsp;·&nbsp; Forgery Confidence Score: 92% — HIGH CONFIDENCE FORGERY</div>
+      <p>Based on the examination conducted, it is my opinion that the submitted COVID Vaccination Certificate bearing Reference No. TG/CYB/2024/0042 shows <strong>18 anomalies across all 6 examination categories</strong> as detailed in the Findings section. The cumulative forgery confidence score is <strong>92.0%</strong>, placing it firmly in the <strong>"High Confidence Forgery"</strong> classification range.</p>
+      <p>The document is, <strong>in all probability, a fabricated instrument</strong> and is NOT consistent with certificates issued by the Government of India through the CoWIN portal operated by NIC. The most conclusive indicators are: (1) PDF Creator metadata identifying Adobe Acrobat 2021 instead of the NIC CoWIN backend; (2) three post-creation edit events in the XMP modification history; (3) an invalid self-signed digital signature with an incomplete ByteRange; (4) signature tracing evidence confirmed by pen lift anomalies and complete absence of natural speed tremor; and (5) ink age testing establishing printing within 30 days, contradicting a claimed vaccination date 14 months prior.</p>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-header">
+        <div class="card-header-icon blue">⚖</div>
+        <div class="card-title">§ 6 — Relevant Case Precedents</div>
+      </div>
+      <div class="card-body">
+        <div class="prec-item">
+          <div class="pi-name">State of Telangana v. Raju &amp; Ors</div>
+          <div class="pi-court">Telangana High Court, 2022</div>
+          <div><span class="ipc-tag">IPC §465</span><span class="ipc-tag">IPC §468</span><span class="ipc-tag">IPC §471</span></div>
+          <div class="pi-detail">Accused sold forged COVID vaccination certificates; digital metadata showed Adobe Acrobat as creator instead of CoWIN portal — identical pattern to present case. Outcome: Conviction — 2 years rigorous imprisonment + fine.</div>
+        </div>
+        <div class="prec-item">
+          <div class="pi-name">University Grants Commission v. Fake Degree Syndicate</div>
+          <div class="pi-court">Delhi High Court, 2022</div>
+          <div><span class="ipc-tag">IPC §420</span><span class="ipc-tag">IPC §468</span><span class="ipc-tag">IPC §471</span></div>
+          <div class="pi-detail">Typography analysis and seal impression mismatches were decisive in establishing forgery. Expert report under Evidence Act S.45 admitted as primary evidence. Outcome: 7 accused convicted.</div>
+        </div>
+        <div class="prec-item" style="margin-bottom:0">
+          <div class="pi-name">Shashi Kumar Banerjee v. Subodh Kumar Banerjee</div>
+          <div class="pi-court">Supreme Court of India — AIR 1964 SC 529</div>
+          <div><span class="ipc-tag">Evidence Act §45</span></div>
+          <div class="pi-detail">Landmark precedent establishing that expert QD opinion must be corroborated and is not conclusive in isolation. The present report's convergence of evidence across 6 independent categories satisfies this standard.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-icon purple">✦</div>
+        <div class="card-title">§ 7 — Expert Declaration</div>
+        <div class="card-sub">Indian Evidence Act, 1872 — Section 45</div>
+      </div>
+      <div class="card-body">
+        <div class="decl-box">I, Dr. A. Sharma, Certified Document Forensics Examiner (CDFE),
+M.Sc. Forensic Science, EagleEye Forensic Unit,
+hereby solemnly declare that:
+
+1. I have personally examined the document(s) listed in Section 2 of this report.
+2. The examination was conducted using standard forensic methods as described in Section 3.
+3. The findings and opinions expressed in this report are based solely on my
+   scientific examination and professional expertise.
+4. I have no personal interest in the outcome of this case.
+5. This report is prepared for submission as expert evidence under Section 45
+   of the Indian Evidence Act, 1872.
+6. The contents of this report are true to the best of my knowledge and belief.
+
+Signature   : _______________________
+Name        : Dr. A. Sharma
+Designation : Certified QD Examiner (CDFE), M.Sc. Forensic Science
+Organisation: EagleEye Forensic Unit
+Date        : 15/01/2024
+Place       : Hyderabad, Telangana</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ PAGE: UPLOAD & DETECT ═══════════════════════════════════════════ -->
+  <div class="page" id="page-upload">
+
+    <div class="page-title">Upload &amp; Detect</div>
+    <div class="page-sub">Upload a document to automatically scan it for forgery anomalies using AI-assisted analysis</div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <div class="card-header-icon blue">↑</div>
+        <div class="card-title">Document Upload</div>
+        <div class="card-sub">Max file size: 25 MB</div>
+      </div>
+      <div class="card-body">
+        <div class="upload-zone" id="upload-zone">
+          <input type="file" id="file-input" accept=".pdf,.jpg,.jpeg,.png,.tiff,.docx" />
+          <div class="upload-icon">📄</div>
+          <div class="upload-title">Drop your document here or click to browse</div>
+          <div class="upload-sub">Supported document types for forensic analysis</div>
+          <div class="upload-formats">
+            <span class="fmt-tag">PDF</span>
+            <span class="fmt-tag">JPG</span>
+            <span class="fmt-tag">PNG</span>
+            <span class="fmt-tag">TIFF</span>
+            <span class="fmt-tag">DOCX</span>
+          </div>
+        </div>
+
+        <div class="upload-progress" id="upload-progress">
+          <div class="progress-label">
+            <span id="prog-filename">document.pdf</span>
+            <span id="prog-pct">0%</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" id="prog-fill"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="scan-card" style="margin-bottom:16px;display:none">
+      <div class="card-header">
+        <div class="card-header-icon orange">⬡</div>
+        <div class="card-title">Forensic Scan in Progress</div>
+        <div class="card-sub" id="scan-status-lbl">Initialising…</div>
+      </div>
+      <div class="card-body">
+        <div class="scan-steps" id="scan-steps" style="display:block">
+          <div class="scan-step" id="step-0"><div class="ss-icon pending" id="si-0">○</div><div class="ss-label">Typography &amp; font consistency analysis</div><div class="ss-status" id="ss-0">Waiting</div></div>
+          <div class="scan-step" id="step-1"><div class="ss-icon pending" id="si-1">○</div><div class="ss-label">Signature &amp; handwriting examination</div><div class="ss-status" id="ss-1">Waiting</div></div>
+          <div class="scan-step" id="step-2"><div class="ss-icon pending" id="si-2">○</div><div class="ss-label">Paper substrate &amp; GSM verification</div><div class="ss-status" id="ss-2">Waiting</div></div>
+          <div class="scan-step" id="step-3"><div class="ss-icon pending" id="si-3">○</div><div class="ss-label">Ink analysis &amp; printing process detection</div><div class="ss-status" id="ss-3">Waiting</div></div>
+          <div class="scan-step" id="step-4"><div class="ss-icon pending" id="si-4">○</div><div class="ss-label">Digital metadata &amp; PDF structure forensics</div><div class="ss-status" id="ss-4">Waiting</div></div>
+          <div class="scan-step" id="step-5"><div class="ss-icon pending" id="si-5">○</div><div class="ss-label">Seal &amp; stamp impression analysis</div><div class="ss-status" id="ss-5">Waiting</div></div>
+          <div class="scan-step" id="step-6"><div class="ss-icon pending" id="si-6">○</div><div class="ss-label">Confidence scoring &amp; standards mapping</div><div class="ss-status" id="ss-6">Waiting</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="detect-result" style="display:none">
+      <div class="card-header">
+        <div class="card-header-icon red">⚑</div>
+        <div class="card-title">Detection Results</div>
+        <div class="card-sub" id="detect-file-name">—</div>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+          <div class="stat-card v-red" style="flex:1;min-width:130px">
+            <div class="stat-label">Confidence Score</div>
+            <div class="stat-value" id="d-score">—</div>
+            <div class="stat-sub" id="d-class">—</div>
+          </div>
+          <div class="stat-card v-orange" style="flex:1;min-width:130px">
+            <div class="stat-label">Anomalies Found</div>
+            <div class="stat-value" id="d-count">—</div>
+            <div class="stat-sub" id="d-cats">—</div>
+          </div>
+          <div class="stat-card v-red" style="flex:1;min-width:130px">
+            <div class="stat-label">Critical Flags</div>
+            <div class="stat-value" id="d-crit">—</div>
+            <div class="stat-sub">Require immediate review</div>
+          </div>
+        </div>
+        <div id="detect-findings-table"></div>
+        <div class="btn-row" style="margin-top:14px">
+          <button class="btn btn-primary btn-sm" onclick="goPage('newcase')">Open in New Case Form</button>
+          <button class="btn btn-secondary btn-sm" onclick="resetUpload()">Scan Another Document</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ PAGE: NEW CASE ══════════════════════════════════════════════════ -->
+  <div class="page" id="page-newcase">
+
+    <div class="page-title">New Case Submission</div>
+    <div class="page-sub">Complete all required fields and enter structured observations to initiate a forensic examination</div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-icon blue">📝</div>
+        <div class="card-title">Case Information</div>
+        <div class="card-sub">Required fields marked <span style="color:var(--red)">*</span></div>
+      </div>
+      <div class="card-body">
+
+        <div class="form-section-title">Case Details</div>
+        <div class="form-row trio">
+          <div class="form-field">
+            <label class="form-label">Case ID <span>*</span></label>
+            <input class="form-input" id="nc-caseid" type="text" placeholder="EE-2024-002" />
+            <div class="form-error" id="err-caseid">Case ID is required</div>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Reference Number</label>
+            <input class="form-input" id="nc-ref" type="text" placeholder="TG/CYB/2024/0043" />
+          </div>
+          <div class="form-field">
+            <label class="form-label">Date Received <span>*</span></label>
+            <input class="form-input" id="nc-date" type="date" />
+            <div class="form-error" id="err-date">Date is required</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-field">
+            <label class="form-label">Document Type <span>*</span></label>
+            <select class="form-select" id="nc-doctype">
+              <option value="">— Select document type —</option>
+              <option>COVID Vaccination Certificate</option>
+              <option>University Degree / Marksheet</option>
+              <option>Property Document / Sale Deed</option>
+              <option>FIR / Police Record</option>
+              <option>Passport / Identity Document</option>
+              <option>Government Tender Document</option>
+              <option>Court Order / Affidavit</option>
+              <option>Other</option>
+            </select>
+            <div class="form-error" id="err-doctype">Document type is required</div>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Reference Specimen Available</label>
+            <select class="form-select" id="nc-specimen">
+              <option value="yes">Yes — provided for comparison</option>
+              <option value="no">No — examination without reference</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-field">
+            <label class="form-label">Submitted By <span>*</span></label>
+            <input class="form-input" id="nc-submitted" type="text" placeholder="Inspector name, unit / authority" />
+            <div class="form-error" id="err-submitted">Submitting authority is required</div>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Examiner Name <span>*</span></label>
+            <input class="form-input" id="nc-examiner" type="text" placeholder="Dr. A. Sharma, CDFE" />
+            <div class="form-error" id="err-examiner">Examiner name is required</div>
+          </div>
+        </div>
+
+        <div class="form-row solo">
+          <div class="form-field">
+            <label class="form-label">Purpose of Examination <span>*</span></label>
+            <textarea class="form-textarea" id="nc-purpose" placeholder="Describe what needs to be determined. e.g. To determine whether the submitted document is a genuine certificate or a fabricated/tampered instrument…"></textarea>
+            <div class="form-error" id="err-purpose">Purpose is required</div>
+          </div>
+        </div>
+
+        <div class="form-divider"></div>
+        <div class="form-section-title">Structured Observations</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-bottom:14px">Check each anomaly type observed and enter a brief description. At least one observation is required.</div>
+
+        <!-- TYP -->
+        <div class="obs-accordion" id="acc-TYP">
+          <div class="obs-header" onclick="toggleAcc('TYP')">
+            <span class="badge badge-TYP">TYP</span> Typography &amp; Font Analysis
+            <span class="oh-toggle">▶</span>
+          </div>
+          <div class="obs-body" id="body-TYP">
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-typ1" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Font Inconsistency</div>
+                <input class="form-input" id="obs-typ1" type="text" placeholder="Describe font family mismatch across fields…" />
+              </div>
+            </div>
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-typ2" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Kerning / Letter Spacing Anomaly</div>
+                <input class="form-input" id="obs-typ2" type="text" placeholder="e.g. Irregular 2.1pt spacing in date field…" />
+              </div>
+            </div>
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-typ3" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Baseline Shift</div>
+                <input class="form-input" id="obs-typ3" type="text" placeholder="e.g. 2.3mm downward deviation in DOB row…" />
+              </div>
+            </div>
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-typ4" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Resolution Mismatch (DPI)</div>
+                <input class="form-input" id="obs-typ4" type="text" placeholder="e.g. Name field 72 DPI vs rest of doc 300 DPI…" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SIG -->
+        <div class="obs-accordion" id="acc-SIG">
+          <div class="obs-header" onclick="toggleAcc('SIG')">
+            <span class="badge badge-SIG">SIG</span> Signature &amp; Handwriting Examination
+            <span class="oh-toggle">▶</span>
+          </div>
+          <div class="obs-body" id="body-SIG">
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-sig1" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Pen Pressure Anomaly</div>
+                <input class="form-input" id="obs-sig1" type="text" placeholder="e.g. Uniform pressure, no downstroke variation…" />
+              </div>
+            </div>
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-sig2" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Pen Lift / Tracing Evidence</div>
+                <input class="form-input" id="obs-sig2" type="text" placeholder="e.g. Unnatural pen lift mid-stroke in 'S' character…" />
+              </div>
+            </div>
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-sig3" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Tremor / Speed Variation</div>
+                <input class="form-input" id="obs-sig3" type="text" placeholder="e.g. Complete absence of natural speed tremor at 20× magnification…" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PAP -->
+        <div class="obs-accordion" id="acc-PAP">
+          <div class="obs-header" onclick="toggleAcc('PAP')">
+            <span class="badge badge-PAP">PAP</span> Paper &amp; Substrate Analysis
+            <span class="oh-toggle">▶</span>
+          </div>
+          <div class="obs-body" id="body-PAP">
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-pap1" />
+              <div class="obs-fields">
+                <div class="obs-field-label">GSM Deviation</div>
+                <input class="form-input" id="obs-pap1" type="text" placeholder="e.g. Measured 80 GSM vs expected 100 GSM…" />
+              </div>
+            </div>
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-pap2" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Watermark Anomaly</div>
+                <input class="form-input" id="obs-pap2" type="text" placeholder="e.g. No watermark detected under transmitted light…" />
+              </div>
+            </div>
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-pap3" />
+              <div class="obs-fields">
+                <div class="obs-field-label">UV Fluorescence</div>
+                <input class="form-input" id="obs-pap3" type="text" placeholder="e.g. Bright white fluoresence under 365nm UV — copy paper characteristic…" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- INK -->
+        <div class="obs-accordion" id="acc-INK">
+          <div class="obs-header" onclick="toggleAcc('INK')">
+            <span class="badge badge-INK">INK</span> Ink &amp; Printing Process
+            <span class="oh-toggle">▶</span>
+          </div>
+          <div class="obs-body" id="body-INK">
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-ink1" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Printing Process Mismatch</div>
+                <input class="form-input" id="obs-ink1" type="text" placeholder="e.g. Laser toner detected where inkjet printing expected…" />
+              </div>
+            </div>
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-ink2" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Ink Age Inconsistency</div>
+                <input class="form-input" id="obs-ink2" type="text" placeholder="e.g. Ink printed within 30 days but document claims 14 months old…" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DIG -->
+        <div class="obs-accordion" id="acc-DIG">
+          <div class="obs-header" onclick="toggleAcc('DIG')">
+            <span class="badge badge-DIG">DIG</span> Digital Metadata &amp; PDF Structure
+            <span class="oh-toggle">▶</span>
+          </div>
+          <div class="obs-body" id="body-DIG">
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-dig1" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Creator / Producer Mismatch</div>
+                <input class="form-input" id="obs-dig1" type="text" placeholder="e.g. Adobe Acrobat 2021 found; expected NIC CoWIN portal…" />
+              </div>
+            </div>
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-dig2" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Post-Creation Modifications</div>
+                <input class="form-input" id="obs-dig2" type="text" placeholder="e.g. 3 XMP modification events after creation date…" />
+              </div>
+            </div>
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-dig3" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Digital Signature Validity</div>
+                <input class="form-input" id="obs-dig3" type="text" placeholder="e.g. Self-signed certificate, ByteRange incomplete…" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SEA -->
+        <div class="obs-accordion" id="acc-SEA">
+          <div class="obs-header" onclick="toggleAcc('SEA')">
+            <span class="badge badge-SEA">SEA</span> Seal, Stamp &amp; Impression
+            <span class="oh-toggle">▶</span>
+          </div>
+          <div class="obs-body" id="body-SEA">
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-sea1" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Impression Quality Anomaly</div>
+                <input class="form-input" id="obs-sea1" type="text" placeholder="e.g. Uneven ink distribution, pooling on left arc…" />
+              </div>
+            </div>
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-sea2" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Font Anomaly in Seal</div>
+                <input class="form-input" id="obs-sea2" type="text" placeholder="e.g. Arial Narrow found; genuine seal uses proprietary govt font…" />
+              </div>
+            </div>
+            <div class="obs-item">
+              <input class="obs-chk" type="checkbox" id="chk-sea3" />
+              <div class="obs-fields">
+                <div class="obs-field-label">Dimensional Mismatch</div>
+                <input class="form-input" id="obs-sea3" type="text" placeholder="e.g. Seal 38mm diameter vs reference 42mm…" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-divider"></div>
+        <div class="form-row solo">
+          <div class="form-field">
+            <label class="form-label">Additional Notes / Context</label>
+            <textarea class="form-textarea" id="nc-notes" placeholder="Any additional context, chain of custody notes, or examiner remarks…"></textarea>
+          </div>
+        </div>
+
+        <div id="form-obs-error" style="display:none;color:var(--red);font-size:11px;margin-bottom:12px">Please tick and describe at least one anomaly observation before submitting.</div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="submitCase()">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M8 5v6M5 8h6"/></svg>
+            Submit for Examination
+          </button>
+          <button class="btn btn-secondary" onclick="resetForm()">Clear Form</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Examination result injected here by showCaseResult() -->
+    <div id="case-result-area"></div>
+
+  </div>
+
+</div><!-- /main -->
+</div><!-- /shell -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── API BASE URL ─────────────────────────────────────────────────────────────
+// When served by api.js (http://localhost:3001) this is same-origin.
+// Change if deploying elsewhere.
+const API = '';
+
+// ─── STATIC FINDINGS — Case EE-2024-001 (pre-examined, not recalculated) ─────
+const FINDINGS = [
+  {id:1,code:'TYP',cat:'Typography',sev:'High',obs:'Arial font in Ministry of Health header; Times New Roman in patient name and DOB fields.',std:'ASTM E2388 §6.3'},
+  {id:2,code:'TYP',cat:'Typography',sev:'High',obs:'Irregular kerning of 2.1pt in date field; genuine CoWIN certificates show uniform 0pt kerning.',std:'ASTM E2388 §6.3'},
+  {id:3,code:'TYP',cat:'Typography',sev:'High',obs:'2.3mm downward baseline shift in Date of Birth row — field was inserted independently.',std:'ASTM E2388 §6.3; FSL Protocol 3.1'},
+  {id:4,code:'TYP',cat:'Typography',sev:'High',obs:'Name field at 72 DPI; remainder at 300 DPI — conclusive indicator of independent insertion.',std:'ASTM E2388 §6.3; FSL Protocol 3.1'},
+  {id:5,code:'SIG',cat:'Signature',sev:'Critical',obs:'Uniform pen pressure throughout — no downstroke variation; characteristic of traced signature.',std:'ASTM E2388 §6.1'},
+  {id:6,code:'SIG',cat:'Signature',sev:'Critical',obs:"Unnatural pen lift mid-stroke in 'S' under 20× — consistent with tracing.",std:'ASTM E2388 §6.1; FSL Protocol 2.1'},
+  {id:7,code:'SIG',cat:'Signature',sev:'Critical',obs:'Complete absence of natural speed tremor in connecting strokes.',std:'ASTM E2388 §6.1; FSL Protocol 2.1'},
+  {id:8,code:'PAP',cat:'Paper',sev:'Medium',obs:'Paper weight 80 GSM; CoWIN spec is 100 GSM — 20% below specification.',std:'ASTM E2388 §6.5'},
+  {id:9,code:'PAP',cat:'Paper',sev:'Medium',obs:"No security watermark under transmitted light; genuine certificates bear 'Government of India' watermark.",std:'ASTM E2388 §6.5; FSL Protocol 5.1'},
+  {id:10,code:'PAP',cat:'Paper',sev:'Medium',obs:'Bright white fluorescence under 365nm UV — copy paper characteristic.',std:'ASTM E2388 §6.5; FSL Protocol 5.1'},
+  {id:11,code:'INK',cat:'Ink / Printing',sev:'High',obs:'Laser toner across entire document; genuine CoWIN certificates use inkjet for variable data.',std:'ASTM E2388 §6.4'},
+  {id:12,code:'INK',cat:'Ink / Printing',sev:'High',obs:'Ink age test: printed within 30 days; certificate claims 14 months prior.',std:'ASTM E2388 §6.4; FSL Protocol 4.1'},
+  {id:13,code:'DIG',cat:'Digital Metadata',sev:'Critical',obs:"PDF Creator: 'Adobe Acrobat 2021'; genuine CoWIN certificates carry 'CoWIN' — definitive fabrication indicator.",std:'ASTM E2388 §6.7'},
+  {id:14,code:'DIG',cat:'Digital Metadata',sev:'Critical',obs:'XMP history: 3 post-creation edit events; genuine single-issue documents have zero.',std:'ASTM E2388 §6.7; FSL Protocol 7.2'},
+  {id:15,code:'DIG',cat:'Digital Metadata',sev:'Critical',obs:'Digital signature invalid: self-signed, ByteRange incomplete — content modified after signing.',std:'ASTM E2388 §6.7; FSL Protocol 7.2'},
+  {id:16,code:'SEA',cat:'Seal / Stamp',sev:'High',obs:'Uneven ink distribution in seal impression — genuine seals produce uniform impression.',std:'ASTM E2388 §6.6'},
+  {id:17,code:'SEA',cat:'Seal / Stamp',sev:'High',obs:'Seal uses Arial Narrow; genuine Ministry seals use a proprietary government typeface.',std:'ASTM E2388 §6.6; FSL Protocol 6.1'},
+  {id:18,code:'SEA',cat:'Seal / Stamp',sev:'High',obs:'Seal diameter 38mm vs reference 42mm — 4mm discrepancy (9.5% undersized).',std:'ASTM E2388 §6.6; FSL Protocol 6.1'}
+];
+
+// ─── NAVIGATION ───────────────────────────────────────────────────────────────
+const PAGE_LABELS = {overview:'Overview',findings:'Findings',report:'Expert Report',upload:'Upload & Detect',newcase:'New Case'};
+function goPage(id) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.nav-item[data-page="${id}"]`).classList.add('active');
+  document.getElementById('page-' + id).classList.add('active');
+  document.getElementById('bc-page').textContent = PAGE_LABELS[id] || id;
+}
+document.querySelectorAll('.nav-item[data-page]').forEach(item => {
+  item.addEventListener('click', () => goPage(item.dataset.page));
+});
+
+// ─── FINDINGS TABLE ───────────────────────────────────────────────────────────
+function renderFindings(filter) {
+  const rows = filter === 'all' ? FINDINGS : FINDINGS.filter(f => f.sev === filter || f.code === filter);
+  document.getElementById('ftbody').innerHTML = rows.length
+    ? rows.map(f => `<tr>
+        <td class="row-num">${String(f.id).padStart(2,'0')}</td>
+        <td><span class="badge badge-${f.code}">${f.code}</span></td>
+        <td style="white-space:nowrap;color:var(--text2)">${f.cat}</td>
+        <td class="obs">${f.obs}</td>
+        <td><span class="sev sev-${f.sev}">${f.sev}</span></td>
+        <td class="std">${f.std}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--muted)">No findings match this filter</td></tr>`;
+}
+renderFindings('all');
+document.getElementById('filter-bar').addEventListener('click', e => {
+  const b = e.target.closest('.fbtn'); if (!b) return;
+  document.querySelectorAll('.fbtn').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  renderFindings(b.dataset.f);
+});
+
+// ─── ACCORDION ────────────────────────────────────────────────────────────────
+function toggleAcc(id) {
+  const hd = document.querySelector(`#acc-${id} .obs-header`);
+  const bd = document.getElementById(`body-${id}`);
+  hd.classList.toggle('open'); bd.classList.toggle('open');
+}
+
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+function showToast(msg, col, dur=4000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = col || 'var(--green)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+// ─── STEP ANIMATION HELPERS ───────────────────────────────────────────────────
+const STEP_LABELS = [
+  'Typography & font consistency analysis',
+  'Signature & handwriting examination',
+  'Paper substrate & GSM verification',
+  'Ink analysis & printing process detection',
+  'Digital metadata & PDF structure forensics',
+  'Seal & stamp impression analysis',
+  'Confidence scoring & standards mapping'
+];
+
+function resetSteps() {
+  for (let i = 0; i < 7; i++) {
+    document.getElementById('si-'+i).textContent = '○';
+    document.getElementById('si-'+i).className = 'ss-icon pending';
+    document.getElementById('ss-'+i).textContent = 'Waiting';
+    document.getElementById('step-'+i).classList.remove('active','done-step');
+  }
+}
+
+function animateSteps(durationMs, onDone) {
+  const perStep = durationMs / STEP_LABELS.length;
+  STEP_LABELS.forEach((lbl, i) => {
+    setTimeout(() => {
+      document.getElementById('si-'+i).textContent = '◎';
+      document.getElementById('si-'+i).className = 'ss-icon running';
+      document.getElementById('ss-'+i).textContent = 'Scanning…';
+      document.getElementById('step-'+i).classList.add('active');
+      document.getElementById('scan-status-lbl').textContent = lbl + '…';
+    }, i * perStep);
+    setTimeout(() => {
+      document.getElementById('si-'+i).textContent = '✓';
+      document.getElementById('si-'+i).className = 'ss-icon done';
+      document.getElementById('ss-'+i).textContent = 'Complete';
+      document.getElementById('step-'+i).classList.remove('active');
+      document.getElementById('step-'+i).classList.add('done-step');
+    }, i * perStep + perStep * 0.8);
+  });
+  setTimeout(onDone, durationMs);
+}
+
+// ─── UPLOAD & DETECT — LIVE API ───────────────────────────────────────────────
+let scanActive = false;
+
+function resetUpload() {
+  document.getElementById('upload-progress').style.display = 'none';
+  document.getElementById('scan-card').style.display = 'none';
+  document.getElementById('detect-result').style.display = 'none';
+  document.getElementById('file-input').value = '';
+  document.getElementById('prog-fill').style.width = '0%';
+  document.getElementById('prog-pct').textContent = '0%';
+  scanActive = false;
+  resetSteps();
+}
+
+document.getElementById('file-input').addEventListener('change', function() {
+  if (!this.files.length || scanActive) return;
+  startScan(this.files[0]);
+});
+const zone = document.getElementById('upload-zone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('drag');
+  if (e.dataTransfer.files.length && !scanActive) startScan(e.dataTransfer.files[0]);
+});
+
+async function startScan(file) {
+  scanActive = true;
+  const allowedExt = ['pdf','jpg','jpeg','png','tiff','tif','docx'];
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!allowedExt.includes(ext)) {
+    showToast('Unsupported file type. Please upload PDF, JPG, PNG, TIFF or DOCX.', 'var(--red)');
+    scanActive = false; return;
+  }
+
+  // Show progress UI
+  document.getElementById('upload-progress').style.display = 'block';
+  document.getElementById('prog-filename').textContent = file.name;
+  document.getElementById('prog-pct').textContent = '0%';
+  document.getElementById('scan-card').style.display = 'block';
+  document.getElementById('detect-result').style.display = 'none';
+  document.getElementById('scan-status-lbl').textContent = 'Uploading…';
+
+  // Animate progress bar while API call runs
+  let pct = 0;
+  const pi = setInterval(() => {
+    pct = Math.min(pct + Math.random() * 12, 90); // stop at 90% until response
+    document.getElementById('prog-fill').style.width = pct + '%';
+    document.getElementById('prog-pct').textContent = Math.round(pct) + '%';
+  }, 150);
+
+  // Animate steps in sync with expected API time (~3s)
+  animateSteps(3000, () => {});
+
+  // Build FormData and call API
+  const docType = document.getElementById('nc-doctype')
+    ? (document.getElementById('nc-doctype').value || 'Unknown Document')
+    : 'Unknown Document';
+  const form = new FormData();
+  form.append('file', file);
+  form.append('document_type', docType);
+
+  let data;
+  try {
+    const resp = await fetch(`${API}/api/examine`, { method: 'POST', body: form });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({error: resp.statusText}));
+      throw new Error(err.error || resp.statusText);
+    }
+    data = await resp.json();
+  } catch (e) {
+    clearInterval(pi);
+    document.getElementById('prog-fill').style.width = '100%';
+    document.getElementById('prog-pct').textContent = '100%';
+    document.getElementById('scan-status-lbl').textContent = 'Error';
+    showToast('API error: ' + e.message + ' — is the server running? (node api.js)', 'var(--red)', 6000);
+    scanActive = false; return;
+  }
+
+  // Complete progress bar
+  clearInterval(pi);
+  document.getElementById('prog-fill').style.width = '100%';
+  document.getElementById('prog-pct').textContent = '100%';
+  document.getElementById('scan-status-lbl').textContent = 'Analysis complete';
+
+  // Render real results
+  renderDetectResults(data);
+  scanActive = false;
+}
+
+function renderDetectResults(data) {
+  const s = data.score;
+  const critCount = (data.classified_anomalies || []).filter(a => a.severity === 'Critical').length;
+  const catCount = Object.keys(s.category_summary || {}).length;
+
+  document.getElementById('detect-result').style.display = 'block';
+  document.getElementById('detect-file-name').textContent = data.filename || '';
+  document.getElementById('d-score').textContent = s.confidence_score + '%';
+  document.getElementById('d-class').textContent = s.classification;
+  document.getElementById('d-count').textContent = s.anomaly_count;
+  document.getElementById('d-cats').textContent = catCount + ' categor' + (catCount === 1 ? 'y' : 'ies');
+  document.getElementById('d-crit').textContent = critCount;
+
+  // Findings table from real classified anomalies
+  const anomalies = data.classified_anomalies || [];
+  if (anomalies.length) {
+    const rows = anomalies.map(a => `<tr>
+      <td><span class="badge badge-${a.anomaly_type}">${a.anomaly_type}</span></td>
+      <td style="color:var(--text2);font-size:11px;white-space:nowrap">${a.category_label}</td>
+      <td style="font-size:11.5px;color:var(--text)">${a.observation}</td>
+      <td><span class="sev sev-${a.severity}">${a.severity}</span></td>
+    </tr>`).join('');
+    document.getElementById('detect-findings-table').innerHTML = `
+      <table class="ftable" style="font-size:11.5px">
+        <thead><tr><th>Code</th><th>Category</th><th>Detected Signal</th><th>Severity</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } else {
+    document.getElementById('detect-findings-table').innerHTML =
+      `<p style="color:var(--muted);font-size:12px;padding:12px 0">No extractable signals found. The file may require OCR or manual examination.</p>`;
+  }
+
+  if (data.extraction_note) {
+    document.getElementById('detect-findings-table').insertAdjacentHTML('beforeend',
+      `<p style="color:var(--muted);font-size:10.5px;margin-top:10px;font-style:italic">${data.extraction_note}</p>`);
+  }
+
+  showToast(`Scan complete — ${s.anomaly_count} anomalies · ${s.confidence_score}% confidence`);
+}
+
+// ─── NEW CASE FORM — LIVE API ─────────────────────────────────────────────────
+function validate(id, errId) {
+  const el = document.getElementById(id);
+  const err = document.getElementById(errId);
+  if (!el.value.trim()) { el.classList.add('error'); err.style.display='block'; return false; }
+  el.classList.remove('error'); err.style.display='none'; return true;
+}
+
+// Result section — injected below the form after a successful submission
+function showCaseResult(data) {
+  // Remove any previous result
+  document.getElementById('case-result-area').innerHTML = '';
+
+  const s = data.score;
+  const critCount = (data.classified_anomalies||[]).filter(a=>a.severity==='Critical').length;
+  const anomalyRows = (data.classified_anomalies||[]).map((a,i) => `<tr>
+    <td class="row-num">${String(i+1).padStart(2,'0')}</td>
+    <td><span class="badge badge-${a.anomaly_type}">${a.anomaly_type}</span></td>
+    <td style="color:var(--text2);font-size:11px;white-space:nowrap">${a.category_label}</td>
+    <td class="obs">${a.observation}</td>
+    <td><span class="sev sev-${a.severity}">${a.severity}</span></td>
+    <td class="std">${a.standards.astm}</td>
+  </tr>`).join('');
+
+  const precedentHtml = (data.precedents||[]).map(p => `
+    <div class="prec-item">
+      <div class="pi-name">${p.case_name}</div>
+      <div class="pi-court">${p.court}, ${p.year}</div>
+      <div>${(p.ipc_sections||[]).map(s=>`<span class="ipc-tag">${s}</span>`).join('')}</div>
+      <div class="pi-detail">${p.relevance} — <em>${p.outcome}</em></div>
+    </div>`).join('');
+
+  const scoreColor = s.confidence_score >= 76 ? 'var(--red)' : s.confidence_score >= 51 ? 'var(--orange)' : s.confidence_score >= 26 ? 'var(--yellow)' : 'var(--green)';
+
+  document.getElementById('case-result-area').innerHTML = `
+    <div class="card" style="margin-top:20px;border-color:${scoreColor}">
+      <div class="card-header" style="background:rgba(0,0,0,.2)">
+        <div class="card-header-icon" style="background:rgba(0,0,0,.3);color:${scoreColor}">⚑</div>
+        <div class="card-title">Examination Result — Case ${data.case_id}</div>
+        <div class="card-sub" style="color:${scoreColor};font-weight:700">${s.confidence_score}% — ${s.classification}</div>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+          <div class="stat-card" style="flex:1;min-width:120px;border-color:${scoreColor}"><div class="stat-label">Confidence</div><div class="stat-value" style="color:${scoreColor}">${s.confidence_score}%</div><div class="stat-sub">${s.classification}</div></div>
+          <div class="stat-card v-orange" style="flex:1;min-width:120px"><div class="stat-label">Anomalies</div><div class="stat-value">${s.anomaly_count}</div><div class="stat-sub">Detected signals</div></div>
+          <div class="stat-card v-red" style="flex:1;min-width:120px"><div class="stat-label">Critical</div><div class="stat-value">${critCount}</div><div class="stat-sub">Require review</div></div>
+        </div>
+        ${anomalyRows ? `<table class="ftable" style="margin-bottom:16px"><thead><tr><th>#</th><th>Code</th><th>Category</th><th>Observation</th><th>Severity</th><th>Standard</th></tr></thead><tbody>${anomalyRows}</tbody></table>` : ''}
+        ${precedentHtml ? `<div style="margin-top:4px"><div class="bk-title" style="margin-bottom:10px">Relevant Case Precedents</div>${precedentHtml}</div>` : ''}
+        <div class="btn-row" style="margin-top:14px">
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('case-result-area').innerHTML='';resetForm()">Clear &amp; New Case</button>
+        </div>
+      </div>
+    </div>`;
+
+  // Scroll to result
+  document.getElementById('case-result-area').scrollIntoView({behavior:'smooth'});
+}
+
+async function submitCase() {
+  let ok = true;
+  ok = validate('nc-caseid','err-caseid') && ok;
+  ok = validate('nc-date','err-date') && ok;
+  ok = validate('nc-doctype','err-doctype') && ok;
+  ok = validate('nc-submitted','err-submitted') && ok;
+  ok = validate('nc-examiner','err-examiner') && ok;
+  ok = validate('nc-purpose','err-purpose') && ok;
+
+  // Collect ticked observations
+  const OBS_MAP = [
+    {chk:'chk-typ1',obs:'obs-typ1',field:'typography font'},
+    {chk:'chk-typ2',obs:'obs-typ2',field:'typography kerning spacing'},
+    {chk:'chk-typ3',obs:'obs-typ3',field:'typography baseline'},
+    {chk:'chk-typ4',obs:'obs-typ4',field:'typography resolution dpi'},
+    {chk:'chk-sig1',obs:'obs-sig1',field:'signature pen pressure'},
+    {chk:'chk-sig2',obs:'obs-sig2',field:'signature pen lift tracing'},
+    {chk:'chk-sig3',obs:'obs-sig3',field:'signature tremor handwriting'},
+    {chk:'chk-pap1',obs:'obs-pap1',field:'paper gsm substrate'},
+    {chk:'chk-pap2',obs:'obs-pap2',field:'paper watermark'},
+    {chk:'chk-pap3',obs:'obs-pap3',field:'paper uv fluorescence'},
+    {chk:'chk-ink1',obs:'obs-ink1',field:'ink toner printing process'},
+    {chk:'chk-ink2',obs:'obs-ink2',field:'ink age solvent'},
+    {chk:'chk-dig1',obs:'obs-dig1',field:'metadata creator producer pdf digital'},
+    {chk:'chk-dig2',obs:'obs-dig2',field:'metadata modification edit xmp'},
+    {chk:'chk-dig3',obs:'obs-dig3',field:'digital signature certificate'},
+    {chk:'chk-sea1',obs:'obs-sea1',field:'seal stamp impression'},
+    {chk:'chk-sea2',obs:'obs-sea2',field:'seal font stamp'},
+    {chk:'chk-sea3',obs:'obs-sea3',field:'seal dimension diameter stamp'},
+  ];
+
+  const observations = OBS_MAP
+    .filter(m => document.getElementById(m.chk)?.checked)
+    .map(m => ({ field: m.field, text: document.getElementById(m.obs)?.value?.trim() || m.field }))
+    .filter(o => o.text);
+
+  const notesVal = document.getElementById('nc-notes')?.value?.trim();
+  if (notesVal) observations.push({ field: 'general notes', text: notesVal });
+
+  document.getElementById('form-obs-error').style.display = observations.length ? 'none' : 'block';
+  if (!observations.length) ok = false;
+  if (!ok) return;
+
+  // Disable button during request
+  const btn = document.querySelector('#page-newcase .btn-primary');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+
+  const payload = {
+    case_id: document.getElementById('nc-caseid').value.trim(),
+    document_type: document.getElementById('nc-doctype').value,
+    date_received: document.getElementById('nc-date').value,
+    reference_no: document.getElementById('nc-ref').value.trim(),
+    submitted_by: document.getElementById('nc-submitted').value.trim(),
+    examiner: document.getElementById('nc-examiner').value.trim(),
+    purpose: document.getElementById('nc-purpose').value.trim(),
+    specimen_available: document.getElementById('nc-specimen').value,
+    observations
+  };
+
+  try {
+    const resp = await fetch(`${API}/api/case`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({error: resp.statusText}));
+      throw new Error(err.error || resp.statusText);
+    }
+    const data = await resp.json();
+    showToast(`Case ${data.case_id} examined — ${data.score.confidence_score}% confidence`);
+    showCaseResult(data);
+  } catch(e) {
+    showToast('API error: ' + e.message + ' — is the server running? (node api.js)', 'var(--red)', 6000);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M8 5v6M5 8h6"/></svg> Submit for Examination';
+  }
+}
+
+function resetForm() {
+  ['nc-caseid','nc-ref','nc-date','nc-submitted','nc-examiner','nc-purpose','nc-notes'].forEach(id => {
+    const el = document.getElementById(id); if (el) { el.value=''; el.classList.remove('error'); }
+  });
+  document.getElementById('nc-doctype').value = '';
+  document.getElementById('nc-specimen').value = 'yes';
+  document.querySelectorAll('#page-newcase .obs-chk').forEach(c => c.checked=false);
+  document.querySelectorAll('#page-newcase .form-input[id^="obs-"]').forEach(i => i.value='');
+  document.querySelectorAll('#page-newcase .form-error').forEach(e => e.style.display='none');
+  document.getElementById('form-obs-error').style.display='none';
+  document.querySelectorAll('.obs-header.open').forEach(h => h.classList.remove('open'));
+  document.querySelectorAll('.obs-body.open').forEach(b => b.classList.remove('open'));
+}
+
+// ─── EXPORT COURT PDF ─────────────────────────────────────────────────────────
+function exportReportPDF() {
+  // Collect all data from the report page
+  const meta = {};
+  document.querySelectorAll('#page-report .meta-field').forEach(f => {
+    const k = f.querySelector('.mf-key')?.textContent?.trim();
+    const v = f.querySelector('.mf-val')?.textContent?.trim();
+    if (k && v) meta[k] = v;
+  });
+
+  const opinion = document.querySelector('#page-report .opinion-block')?.innerHTML || '';
+
+  const precedents = [...document.querySelectorAll('#page-report .prec-item')].map(p => ({
+    name:   p.querySelector('.pi-name')?.textContent?.trim() || '',
+    court:  p.querySelector('.pi-court')?.textContent?.trim() || '',
+    tags:   [...p.querySelectorAll('.ipc-tag')].map(t => t.textContent.trim()),
+    detail: p.querySelector('.pi-detail')?.textContent?.trim() || ''
+  }));
+
+  const decl = document.querySelector('#page-report .decl-box')?.textContent || '';
+
+  const findings = FINDINGS; // use the static findings for EE-2024-001
+
+  // Build the findings rows
+  const findingRows = findings.map((f, i) => `
+    <tr>
+      <td style="text-align:center;font-weight:700;color:#333">${String(i+1).padStart(2,'0')}</td>
+      <td><span class="badge badge-${f.code}">${f.code}</span></td>
+      <td style="white-space:nowrap">${f.cat}</td>
+      <td>${f.obs}</td>
+      <td><span class="sev sev-${f.sev}">${f.sev}</span></td>
+      <td style="font-size:9pt">${f.std}</td>
+    </tr>`).join('');
+
+  const precedentHTML = precedents.map(p => `
+    <div class="prec">
+      <div class="prec-name">${p.name}</div>
+      <div class="prec-court">${p.court}</div>
+      <div class="prec-tags">${p.tags.map(t => `<span class="tag">${t}</span>`).join(' ')}</div>
+      <div class="prec-detail">${p.detail}</div>
+    </div>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Expert Opinion Report — ${meta['Case Number'] || 'EE-2024-001'}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @page {
+    size: A4;
+    margin: 22mm 20mm 22mm 22mm;
+    @top-center { content: "EXPERT OPINION REPORT — ${meta['Case Number'] || 'EE-2024-001'}"; font-size: 8pt; color: #666; }
+    @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #666; }
+  }
+  body { font-family: "Times New Roman", Times, serif; font-size: 11pt; color: #1a1a1a; line-height: 1.55; background: #fff; }
+  h1 { font-size: 15pt; text-align: center; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4pt; }
+  h2 { font-size: 11pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.8px; margin: 16pt 0 6pt; border-bottom: 1px solid #333; padding-bottom: 3pt; }
+  h3 { font-size: 10.5pt; font-weight: bold; margin: 10pt 0 4pt; }
+  p { margin-bottom: 8pt; text-align: justify; }
+
+  /* Report header box */
+  .report-header {
+    border: 2px solid #1a1a1a; padding: 14pt 16pt; margin-bottom: 20pt;
+    text-align: center;
+  }
+  .report-header .org { font-size: 10pt; letter-spacing: 0.5px; color: #444; margin-bottom: 6pt; }
+  .report-header .case-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4pt 20pt;
+    text-align: left; margin-top: 10pt;
+    border-top: 1px solid #ccc; padding-top: 10pt;
+    font-size: 10pt;
+  }
+  .report-header .case-grid .field { display: flex; gap: 8pt; }
+  .report-header .case-grid .field .lbl { color: #555; min-width: 110pt; }
+  .report-header .case-grid .field .val { font-weight: bold; }
+  .divider { border: none; border-top: 1px solid #bbb; margin: 14pt 0; }
+
+  /* Verdict box */
+  .verdict-box {
+    border: 2px solid #c00; background: #fff8f8;
+    padding: 10pt 14pt; margin-bottom: 14pt;
+    page-break-inside: avoid;
+  }
+  .verdict-box .vb-hd {
+    font-size: 9.5pt; font-weight: bold; text-transform: uppercase;
+    letter-spacing: 0.6px; color: #c00; margin-bottom: 6pt;
+  }
+  .verdict-box p { margin-bottom: 6pt; }
+  .verdict-box p:last-child { margin: 0; }
+  .verdict-box strong { color: #900; }
+
+  /* Findings table */
+  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-bottom: 10pt; }
+  thead tr { background: #f0f0f0; }
+  th { text-align: left; padding: 5pt 7pt; border: 1px solid #aaa; font-weight: bold; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.4px; }
+  td { padding: 5pt 7pt; border: 1px solid #ccc; vertical-align: top; }
+  tr:nth-child(even) td { background: #fafafa; }
+
+  .badge {
+    display: inline-block; padding: 1pt 5pt; border-radius: 3pt;
+    font-family: monospace; font-size: 8.5pt; font-weight: bold;
+    border: 1px solid currentColor;
+  }
+  .badge-TYP { color: #1a5ca8; background: #e8f0fc; }
+  .badge-SIG { color: #5a1ea8; background: #f0eafc; }
+  .badge-PAP { color: #1a7a47; background: #e8f7ee; }
+  .badge-INK { color: #7a5a00; background: #fdf6e0; }
+  .badge-DIG { color: #c00; background: #fceaea; }
+  .badge-SEA { color: #8a3a00; background: #fdf0e8; }
+
+  .sev { display: inline-block; padding: 1pt 5pt; border-radius: 3pt; font-size: 8.5pt; font-weight: bold; border: 1px solid currentColor; }
+  .sev-Critical { color: #c00; background: #fceaea; }
+  .sev-High     { color: #8a3a00; background: #fdf0e8; }
+  .sev-Medium   { color: #7a5a00; background: #fdf6e0; }
+  .sev-Low      { color: #1a7a47; background: #e8f7ee; }
+
+  /* Severity summary */
+  .sev-summary { display: flex; gap: 16pt; margin-bottom: 12pt; font-size: 10pt; }
+  .sev-count { display: flex; align-items: center; gap: 5pt; }
+  .sev-dot { width: 9pt; height: 9pt; border-radius: 50%; display: inline-block; }
+
+  /* Precedents */
+  .prec { border-left: 3pt solid #1a5ca8; padding: 7pt 10pt; margin-bottom: 9pt; background: #f8f9fc; page-break-inside: avoid; }
+  .prec-name  { font-weight: bold; font-size: 10.5pt; color: #1a3a6e; }
+  .prec-court { font-size: 9.5pt; color: #555; margin-top: 2pt; }
+  .prec-tags  { margin: 5pt 0; }
+  .tag        { display: inline-block; padding: 1pt 6pt; background: #e8f0fc; color: #1a5ca8; font-size: 8.5pt; border-radius: 2pt; margin-right: 4pt; border: 1px solid #b0caf0; }
+  .prec-detail { font-size: 10pt; color: #333; margin-top: 4pt; }
+
+  /* Declaration */
+  .decl-box { font-family: "Courier New", monospace; font-size: 9.5pt; background: #f8f8f8; border: 1px solid #ccc; padding: 10pt 12pt; white-space: pre-wrap; line-height: 1.8; margin-bottom: 14pt; }
+
+  /* Signature block */
+  .sig-block { display: grid; grid-template-columns: 1fr 1fr; gap: 20pt; margin-top: 30pt; font-size: 10pt; }
+  .sig-line { border-top: 1px solid #333; padding-top: 4pt; margin-top: 20pt; }
+  .sig-label { font-size: 9pt; color: #555; }
+
+  /* Footer bar */
+  .report-footer {
+    border-top: 2px solid #1a1a1a; margin-top: 24pt; padding-top: 8pt;
+    font-size: 8.5pt; color: #555; text-align: center; line-height: 1.6;
+  }
+
+  /* Watermark */
+  .watermark {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%,-50%) rotate(-35deg);
+    font-size: 72pt; font-weight: 900; color: rgba(0,0,0,0.04);
+    pointer-events: none; z-index: 0; white-space: nowrap;
+    letter-spacing: 4px; font-family: Arial, sans-serif;
+  }
+
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .no-print { display: none !important; }
+    h2 { page-break-after: avoid; }
+    table { page-break-inside: auto; }
+    tr { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="watermark">EAGLEEYE FORENSIC</div>
+
+<!-- ── REPORT HEADER ── -->
+<div class="report-header">
+  <div class="org">EagleEye Forensic Examination Unit</div>
+  <h1>Expert Opinion Report</h1>
+  <div style="font-size:9.5pt;color:#555;margin-top:4pt">Prepared under Indian Evidence Act, 1872 — Section 45</div>
+  <div class="case-grid">
+    ${Object.entries(meta).map(([k,v]) => `
+      <div class="field"><span class="lbl">${k}</span><span class="val">${v}</span></div>`).join('')}
+  </div>
+</div>
+
+<!-- ── SECTION 1 ── -->
+<h2>Section 1 — Brief Facts</h2>
+<p>The document was submitted by ${meta['Submitted By'] || 'the submitting authority'} relating to suspected use and distribution of a forged ${meta['Document Type'] || 'document'}. The examination was requested to determine whether the submitted document is a genuine government-issued instrument or has been fabricated or tampered with. A genuine reference specimen was provided for comparison.</p>
+
+<!-- ── SECTION 2 ── -->
+<h2>Section 2 — Documents Received for Examination</h2>
+<p>1. One (1) ${meta['Document Type'] || 'document'} (A4 size), received in sealed condition from the submitting authority. Condition on receipt: fair, no visible physical damage.</p>
+<p>2. One (1) reference specimen — genuine document provided by the issuing authority for comparison purposes. Condition: good.</p>
+
+<!-- ── SECTION 3 ── -->
+<h2>Section 3 — Examination Conducted</h2>
+<p>The following examinations were conducted on the submitted document: (a) Visual examination under white light and 10× loupe; (b) UV/Ultraviolet light at 365nm and 254nm; (c) Stereomicroscopic examination at 10×–40×; (d) Paper GSM and substrate measurement; (e) Transmitted light watermark verification; (f) Ink spread and printing process analysis; (g) Ink age retention assessment; (h) Digital metadata extraction via ExifTool; (i) PDF structural and XMP history analysis; (j) Digital signature certificate chain verification; (k) Seal impression dimensional and typographic comparison; (l) Full comparison against genuine reference specimen.</p>
+
+<!-- ── SECTION 4 ── -->
+<h2>Section 4 — Findings</h2>
+<p>A total of <strong>${findings.length} anomalies</strong> were identified across <strong>6 examination categories</strong>.</p>
+
+<div class="sev-summary">
+  <div class="sev-count"><span class="sev-dot" style="background:#c00"></span> Critical: ${findings.filter(f=>f.sev==='Critical').length}</div>
+  <div class="sev-count"><span class="sev-dot" style="background:#8a3a00"></span> High: ${findings.filter(f=>f.sev==='High').length}</div>
+  <div class="sev-count"><span class="sev-dot" style="background:#7a5a00"></span> Medium: ${findings.filter(f=>f.sev==='Medium').length}</div>
+  <div class="sev-count"><span class="sev-dot" style="background:#1a7a47"></span> Low: ${findings.filter(f=>f.sev==='Low').length}</div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:26pt">#</th>
+      <th style="width:38pt">Code</th>
+      <th style="width:72pt">Category</th>
+      <th>Observation</th>
+      <th style="width:52pt">Severity</th>
+      <th style="width:100pt">Standard Reference</th>
+    </tr>
+  </thead>
+  <tbody>${findingRows}</tbody>
+</table>
+
+<!-- ── SECTION 5 — OPINION ── -->
+<h2>Section 5 — Expert Opinion</h2>
+<div class="verdict-box">
+  <div class="vb-hd">Forgery Confidence Score: 92% — HIGH CONFIDENCE FORGERY</div>
+  <p>Based on the examination conducted, it is my opinion that the submitted ${meta['Document Type'] || 'document'} bearing Reference No. TG/CYB/2024/0042 shows <strong>18 anomalies across all 6 examination categories</strong>. The cumulative forgery confidence score is <strong>92.0%</strong>, placing it firmly in the <strong>"High Confidence Forgery"</strong> classification range.</p>
+  <p>The document is, <strong>in all probability, a fabricated instrument</strong> and is NOT consistent with certificates issued by the Government of India through the CoWIN portal operated by NIC. The most conclusive indicators are: (1) PDF Creator metadata identifying Adobe Acrobat 2021 instead of the NIC CoWIN backend; (2) three post-creation edit events in the XMP modification history; (3) an invalid self-signed digital signature with an incomplete ByteRange; (4) signature tracing evidence confirmed by pen lift anomalies and complete absence of natural speed tremor; and (5) ink age testing establishing printing within 30 days, contradicting a claimed vaccination date 14 months prior. No single anomaly in isolation is conclusive; however, the convergence of evidence across all 6 independent examination categories makes the forgery determination highly reliable and reproducible.</p>
+</div>
+
+<!-- ── SECTION 6 — PRECEDENTS ── -->
+<h2>Section 6 — Relevant Case Precedents</h2>
+${precedentHTML}
+
+<!-- ── SECTION 7 — DECLARATION ── -->
+<h2>Section 7 — Expert Declaration</h2>
+<p style="font-size:10pt;color:#555;margin-bottom:8pt">In accordance with Indian Evidence Act, 1872 — Section 45</p>
+<div class="decl-box">${decl}</div>
+
+<!-- ── SIGNATURE BLOCK ── -->
+<div class="sig-block">
+  <div>
+    <div class="sig-line"></div>
+    <div><strong>${meta['Examined By'] || 'Dr. A. Sharma'}</strong></div>
+    <div class="sig-label">Examining Officer — Signature</div>
+  </div>
+  <div>
+    <div class="sig-line"></div>
+    <div><strong>Countersigning Authority</strong></div>
+    <div class="sig-label">Head of Forensic Unit — Signature</div>
+  </div>
+</div>
+
+<!-- ── REPORT FOOTER ── -->
+<div class="report-footer">
+  <strong>EagleEye Forensic Examination Unit</strong><br>
+  Standards Applied: ASTM E2388 · FSL Protocols 2.1 / 3.1 / 4.1 / 5.1 / 6.1 / 7.2<br>
+  Indian Evidence Act, 1872 — Section 45 Compliance: Confirmed<br>
+  Report Generated: ${new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'long',year:'numeric'})}
+  &nbsp;·&nbsp; Case: ${meta['Case Number'] || 'EE-2024-001'}
+  &nbsp;·&nbsp; CONFIDENTIAL — FOR JUDICIAL USE ONLY
+</div>
+
+<!-- ── PRINT BUTTON (hidden when printing) ── -->
+<div class="no-print" style="margin-top:30pt;text-align:center">
+  <button onclick="window.print()" style="padding:10px 28px;background:#1a3a6e;color:#fff;border:none;border-radius:5px;font-size:12pt;cursor:pointer;font-family:inherit">
+    Print / Save as PDF
+  </button>
+  <button onclick="window.close()" style="padding:10px 22px;background:#f0f0f0;color:#333;border:1px solid #ccc;border-radius:5px;font-size:12pt;cursor:pointer;font-family:inherit;margin-left:10px">
+    Close
+  </button>
+  <p style="margin-top:12pt;font-size:9pt;color:#888">Use your browser's Print dialog → select "Save as PDF" → set paper size to A4</p>
+</div>
+
+</body>
+</html>`;
+
+  // Open in new window and trigger print dialog
+  const win = window.open('', '_blank', 'width=900,height=700');
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  // Auto-trigger print after fonts load
+  win.onload = () => setTimeout(() => win.print(), 400);
+}
+</script>
+</body>
+</html>
