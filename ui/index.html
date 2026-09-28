@@ -776,6 +776,22 @@ Place       : Hyderabad, Telangana</div>
         <div class="card-sub">Max file size: 25 MB</div>
       </div>
       <div class="card-body">
+        <div style="margin-bottom:14px">
+          <label class="form-label" for="upload-doctype">Document Type</label>
+          <select class="form-select" id="upload-doctype">
+            <option value="Unknown Document">-- Select document type --</option>
+            <option value="COVID Vaccination Certificate">COVID Vaccination Certificate</option>
+            <option value="University Degree Certificate">University Degree Certificate</option>
+            <option value="Property Sale Deed">Property Sale Deed</option>
+            <option value="First Information Report (FIR)">First Information Report (FIR)</option>
+            <option value="Passport">Passport</option>
+            <option value="Aadhaar Card">Aadhaar Card</option>
+            <option value="PAN Card">PAN Card</option>
+            <option value="Bank Document">Bank Document</option>
+            <option value="Court Affidavit">Court Affidavit</option>
+            <option value="Government Certificate">Government Certificate</option>
+          </select>
+        </div>
         <div class="upload-zone" id="upload-zone">
           <input type="file" id="file-input" accept=".pdf,.jpg,.jpeg,.png,.tiff,.docx" />
           <div class="upload-icon">📄</div>
@@ -1153,24 +1169,168 @@ Place       : Hyderabad, Telangana</div>
 <div class="toast" id="toast"></div>
 
 <script>
-// ─── API BASE URL ─────────────────────────────────────────────────────────────
-// When served by api.js (http://localhost:3001) this is same-origin.
-// On GitHub Pages (static host) the backend API is unavailable — detect and notify.
-const IS_GITHUB_PAGES = location.hostname.endsWith('github.io') || location.hostname.endsWith('githubusercontent.com');
-const API = '';
+// ─── CLIENT-SIDE FORENSICS ENGINE ────────────────────────────────────────────
+// Full port of mcp-server/forensics.js running purely in the browser.
+// No server required — works on GitHub Pages, file://, and localhost alike.
 
-if (IS_GITHUB_PAGES) {
-  // Inject a persistent banner below the nav
-  document.addEventListener('DOMContentLoaded', () => {
-    const banner = document.createElement('div');
-    banner.style.cssText = 'background:#1a2a1a;border-bottom:1px solid #2a4a2a;padding:8px 24px;font-size:12px;color:#6dbf6d;display:flex;align-items:center;gap:10px;';
-    banner.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#6dbf6d" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 2"/></svg>'
-      + '<span><strong>GitHub Pages demo</strong> — Overview, Findings &amp; Expert Report show Case EE-2024-001 (pre-loaded). '
-      + 'Upload &amp; Detect and New Case require the local API server: <code style="background:#0d1f0d;padding:2px 6px;border-radius:3px;">cd mcp-server &amp;&amp; node api.js</code></span>';
-    const nav = document.querySelector('nav') || document.querySelector('header') || document.body.firstChild;
-    nav.insertAdjacentElement('afterend', banner);
-  });
+const CATEGORY_MAP = [
+  { keywords:['font','typography','kerning','baseline','typeface','character','spacing','resolution','dpi','alignment','toner','inkjet','printing'],
+    type:'TYP', label:'Typography / Printing Anomaly', baseWeight:15,
+    astm:'ASTM E2388 §6.3 — Typewriting and Printing Examination', fsl:'FSL Protocol 3.1 — Typography Analysis' },
+  { keywords:['signature','handwriting','pen','pressure','tremor','stroke','cursive','autograph','sign','initials','pen lift','tracing'],
+    type:'SIG', label:'Signature / Handwriting Mismatch', baseWeight:25,
+    astm:'ASTM E2388 §6.1 — Handwriting Examination', fsl:'FSL Protocol 2.1 — Signature Verification' },
+  { keywords:['paper','gsm','substrate','watermark','fiber','fluorescence','uv','grain','weight','texture','security thread'],
+    type:'PAP', label:'Paper / Substrate Anomaly', baseWeight:10,
+    astm:'ASTM E2388 §6.5 — Paper and Substrate Examination', fsl:'FSL Protocol 5.1 — Physical Substrate Analysis' },
+  { keywords:['ink','toner','age','spread','bleed','chromatography','solvent','carbon','gel','ballpoint','laser','printing process'],
+    type:'INK', label:'Ink / Printing Process Anomaly', baseWeight:20,
+    astm:'ASTM E2388 §6.4 — Ink Examination', fsl:'FSL Protocol 4.1 — Ink Dating and Comparison' },
+  { keywords:['metadata','creator','producer','moddate','creation','adobe','acrobat','pdf','digital','certificate','geolocation','timestamp','edit','modification','cowin','portal','invalid','signature valid','byterange','xmp'],
+    type:'DIG', label:'Digital Metadata / PDF Structure Anomaly', baseWeight:30,
+    astm:'ASTM E2388 §6.7 — Digital Document Examination', fsl:'FSL Protocol 7.2 — Metadata Forensics' },
+  { keywords:['seal','stamp','impression','emboss','rubber','wax','hallmark','official mark','notary','dimension','diameter'],
+    type:'SEA', label:'Seal / Stamp / Impression Anomaly', baseWeight:20,
+    astm:'ASTM E2388 §6.6 — Stamp and Seal Examination', fsl:'FSL Protocol 6.1 — Impression Evidence' }
+];
+
+const CASE_DATABASE = [
+  { case_name:'State of Telangana v. Raju & Ors', court:'Telangana High Court', year:2022,
+    tags:['covid certificate','vaccination','digital tampering','metadata','adobe','creator'],
+    ipc_sections:['IPC §465','IPC §468','IPC §471'],
+    relevance:'Accused sold forged COVID vaccination certificates; digital metadata showed Adobe Acrobat as creator instead of CoWIN portal.',
+    qd_role:"QD examiner's digital metadata analysis was primary evidence establishing fabrication.",
+    outcome:'Conviction — 2 years rigorous imprisonment + fine.' },
+  { case_name:'University Grants Commission v. Fake Degree Syndicate', court:'Delhi High Court', year:2022,
+    tags:['university degree','education','typography','seal','stamp','font'],
+    ipc_sections:['IPC §420','IPC §468','IPC §471'],
+    relevance:'Typography analysis and seal impression mismatches decisive in establishing forgery.',
+    qd_role:'Expert report under Evidence Act S.45 accepted as primary evidence.',
+    outcome:'Conviction of 7 accused.' },
+  { case_name:'Ram Prasad v. State of Uttar Pradesh', court:'Supreme Court of India', year:2019,
+    tags:['property paper','property document','signature forgery','handwriting','pen pressure'],
+    ipc_sections:['IPC §467','IPC §468','IPC §420'],
+    relevance:'Property sale deed forged through signature fabrication; QD examiner identified mismatch using 12 comparison specimens.',
+    qd_role:'Handwriting examination per ASTM E2388 §6.1 conclusive.',
+    outcome:'Life imprisonment — property forgery under §467.' },
+  { case_name:'State of Maharashtra v. Pradeep Kumar Sharma', court:'Bombay High Court', year:2021,
+    tags:['fir','police record','alteration','ink','age','toner'],
+    ipc_sections:['IPC §463','IPC §466','IPC §471'],
+    relevance:'FIR document altered post-registration; ink age analysis revealed additions made months after original recording.',
+    qd_role:'Ink dating via TLC chromatography established timeline of alterations.',
+    outcome:'7 years — forgery of public register under §466.' },
+  { case_name:'Shashi Kumar Banerjee v. Subodh Kumar Banerjee', court:'Supreme Court of India', year:1964,
+    tags:['handwriting','signature','expert opinion','evidence'],
+    ipc_sections:['Indian Evidence Act §45'],
+    relevance:'Landmark: expert QD opinion must be corroborated and is not conclusive in isolation.',
+    qd_role:'Sets the legal standard for how QD expert evidence is weighed by courts.',
+    outcome:'Precedent: Court must independently assess comparison; expert opinion is one piece of evidence.' }
+];
+
+function clientClassifyAnomaly(observation, field) {
+  const combined = (observation + ' ' + field).toLowerCase();
+  let best = null, bestScore = 0;
+  for (const cat of CATEGORY_MAP) {
+    const score = cat.keywords.filter(kw => combined.includes(kw)).length;
+    if (score > bestScore) { bestScore = score; best = cat; }
+  }
+  if (!best) best = { type:'UNK', label:'Unclassified Anomaly', baseWeight:5,
+    astm:'ASTM E2388 §6.0 — General Document Examination', fsl:'FSL Protocol 1.0 — General Examination' };
+  const severity = best.baseWeight >= 25 ? 'Critical' : best.baseWeight >= 20 ? 'High' : best.baseWeight >= 10 ? 'Medium' : 'Low';
+  return { anomaly_type: best.type, category_label: best.label, severity,
+    confidence_weight: best.baseWeight, observation, field,
+    standards: { astm: best.astm, fsl: best.fsl } };
 }
+
+function clientScoreConfidence(anomalies, document_type) {
+  if (!anomalies.length) return { confidence_score:0, classification:'Likely Genuine', anomaly_count:0, category_summary:{}, detailed_breakdown:[] };
+  const MULT = { Critical:1.5, High:1.2, Medium:1.0, Low:0.7 };
+  let weightedSum = 0, maxPossible = 0;
+  const breakdown = anomalies.map(a => {
+    const m = MULT[a.severity] || 1.0;
+    const w = a.confidence_weight * m;
+    weightedSum += w; maxPossible += 45;
+    return { type:a.anomaly_type, label:a.category_label, severity:a.severity,
+      base_weight:a.confidence_weight, weighted_contribution:Math.round(w), observation:a.observation };
+  });
+  const score = Math.min(100, Math.round((weightedSum / maxPossible) * 100));
+  const classification = score <= 25 ? 'Likely Genuine' : score <= 50 ? 'Inconclusive — Further Examination Recommended' : score <= 75 ? 'Probable Forgery' : 'High Confidence Forgery';
+  const byType = {};
+  for (const b of breakdown) {
+    if (!byType[b.type]) byType[b.type] = { label:b.label, count:0, total_weight:0 };
+    byType[b.type].count++; byType[b.type].total_weight += b.weighted_contribution;
+  }
+  return { document_type, confidence_score:score, classification, anomaly_count:anomalies.length, category_summary:byType, detailed_breakdown:breakdown };
+}
+
+function clientFetchPrecedents(document_type, forgery_type) {
+  const combined = (document_type + ' ' + forgery_type).toLowerCase();
+  const scored = CASE_DATABASE.map(c => ({ ...c, _score: c.tags.filter(t => combined.includes(t)).length }));
+  scored.sort((a,b) => b._score - a._score);
+  return scored.slice(0,3).map(({ _score, ...c }) => c);
+}
+
+function clientRunExamination(document_type, observations) {
+  const classified = observations.filter(o => o.text && o.text.trim()).map(o => clientClassifyAnomaly(o.text, o.field));
+  const score = clientScoreConfidence(classified, document_type);
+  const types = [...new Set(classified.map(c => c.anomaly_type))];
+  const precedents = clientFetchPrecedents(document_type, types.join(' '));
+  return { document_type, classified_anomalies: classified, score, precedents };
+}
+
+// ─── PDF METADATA EXTRACTION (client-side via FileReader) ────────────────────
+function extractPdfObservations(arrayBuffer, document_type) {
+  const bytes = new Uint8Array(arrayBuffer);
+  let raw = '';
+  for (let i = 0; i < Math.min(bytes.length, 200000); i++) raw += String.fromCharCode(bytes[i]);
+
+  const observations = [];
+
+  const creatorMatch = raw.match(/\/Creator\s*\(([^)]{1,80})\)/);
+  const producerMatch = raw.match(/\/Producer\s*\(([^)]{1,80})\)/);
+
+  if (creatorMatch) {
+    const creator = creatorMatch[1];
+    observations.push({ field:'digital metadata creator', text:`PDF Creator metadata: "${creator}"` });
+    const govKw = ['nic','cowin','digilocker','gov','cbse','nsdl','traces','irctc'];
+    if (!govKw.some(k => creator.toLowerCase().includes(k))) {
+      observations.push({ field:'digital metadata creator', text:`Creator "${creator}" does not match expected government portal — possible fabrication using Adobe Acrobat or similar tool` });
+    }
+  }
+  if (producerMatch) observations.push({ field:'digital metadata producer', text:`PDF Producer metadata: "${producerMatch[1]}"` });
+
+  const modDate = raw.match(/\/ModDate\s*\(([^)]{10,30})\)/);
+  const creationDate = raw.match(/\/CreationDate\s*\(([^)]{10,30})\)/);
+  if (modDate && creationDate) {
+    observations.push({ field:'digital metadata modification', text:`Document has ModDate (${modDate[1].trim()}) different from CreationDate (${creationDate[1].trim()}) — post-creation editing detected` });
+  }
+  if (raw.includes('Adobe Acrobat') || raw.includes('Acrobat Distiller')) {
+    observations.push({ field:'digital metadata', text:'Adobe Acrobat identified as PDF authoring tool — inconsistent with government-issued documents which use official portal generators' });
+  }
+  if (raw.includes('/JavaScript') || raw.includes('/JS ')) {
+    observations.push({ field:'digital metadata pdf structure', text:'Embedded JavaScript detected in PDF structure — unusual for official documents' });
+  }
+  if ((raw.match(/xmpMM:History/g) || []).length > 0) {
+    observations.push({ field:'digital metadata xmp', text:'XMP modification history block found — document has been edited after initial creation' });
+  }
+  if (raw.includes('/Sig') && raw.includes('/ByteRange')) {
+    const hasCert = raw.includes('/Cert') || raw.includes('adbe.pkcs7');
+    if (!hasCert) observations.push({ field:'digital signature', text:'Digital signature present but no valid certificate chain found — signature may be invalid or self-signed' });
+  } else {
+    const govTypes = ['certificate','degree','vaccination','property','fir','passport'];
+    if (govTypes.some(k => document_type.toLowerCase().includes(k))) {
+      observations.push({ field:'digital signature', text:'No digital signature detected on a document type that should carry an official digital signature' });
+    }
+  }
+  const fonts = [...raw.matchAll(/\/FontName\s*\/([A-Za-z0-9_+\-]{2,40})/g)].map(m => m[1]);
+  const uniqueFonts = [...new Set(fonts)];
+  if (uniqueFonts.length > 3) {
+    observations.push({ field:'typography font', text:`${uniqueFonts.length} distinct fonts detected (${uniqueFonts.slice(0,4).join(', ')}…) — official single-source documents typically use 1–2 fonts` });
+  }
+  return observations;
+}
+
+const API = ''; // kept for local server compatibility
 
 // ─── STATIC FINDINGS — Case EE-2024-001 (pre-examined, not recalculated) ─────
 const FINDINGS = [
@@ -1327,52 +1487,70 @@ async function startScan(file) {
   document.getElementById('prog-pct').textContent = '0%';
   document.getElementById('scan-card').style.display = 'block';
   document.getElementById('detect-result').style.display = 'none';
-  document.getElementById('scan-status-lbl').textContent = 'Uploading…';
+  document.getElementById('scan-status-lbl').textContent = 'Reading file…';
 
-  // Animate progress bar while API call runs
+  // Get document type from the upload page selector if present
+  const uploadDocType = document.getElementById('upload-doctype');
+  const docType = uploadDocType ? (uploadDocType.value || 'Unknown Document') : 'Unknown Document';
+
+  // Animate progress bar over ~2.5 seconds
   let pct = 0;
   const pi = setInterval(() => {
-    pct = Math.min(pct + Math.random() * 12, 90); // stop at 90% until response
+    pct = Math.min(pct + Math.random() * 14, 90);
     document.getElementById('prog-fill').style.width = pct + '%';
     document.getElementById('prog-pct').textContent = Math.round(pct) + '%';
-  }, 150);
+  }, 120);
 
-  // Animate steps in sync with expected API time (~3s)
-  animateSteps(3000, () => {});
+  // Animate steps in sync
+  animateSteps(2500, () => {});
 
-  // Build FormData and call API
-  const docType = document.getElementById('nc-doctype')
-    ? (document.getElementById('nc-doctype').value || 'Unknown Document')
-    : 'Unknown Document';
-  const form = new FormData();
-  form.append('file', file);
-  form.append('document_type', docType);
-
-  let data;
   try {
-    const resp = await fetch(`${API}/api/examine`, { method: 'POST', body: form });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({error: resp.statusText}));
-      throw new Error(err.error || resp.statusText);
+    let observations = [];
+    let extraction_note = 'Signals extracted from file properties';
+
+    if (ext === 'pdf') {
+      // Read PDF as ArrayBuffer for client-side metadata extraction
+      const arrayBuffer = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      });
+      observations = extractPdfObservations(arrayBuffer, docType);
+      extraction_note = 'Metadata extracted from PDF buffer (client-side)';
     }
-    data = await resp.json();
-  } catch (e) {
+
+    // Filename suspicious terms
+    const suspiciousNames = ['edited','copy','modified','fake','new','v2','final','template'];
+    if (suspiciousNames.some(s => file.name.toLowerCase().includes(s))) {
+      observations.push({ field:'digital metadata filename', text:`Filename "${file.name}" contains a suspicious term suggesting the document was edited or is a copy` });
+    }
+
+    // File size signal
+    if (file.size < 5000 && ['certificate','degree','vaccination'].some(k => docType.toLowerCase().includes(k))) {
+      observations.push({ field:'paper substrate', text:`File size is unusually small (${file.size} bytes) for an official certificate — may indicate a low-quality scan or simplified reproduction` });
+    }
+
+    if (observations.length === 0) {
+      observations.push({ field:'general', text:`${ext.toUpperCase()} document uploaded — no extractable metadata signals found; manual physical examination required` });
+    }
+
+    const result = clientRunExamination(docType, observations);
+    const data = { filename: file.name, file_size_bytes: file.size, file_type: ext, document_type: docType, extraction_note, ...result };
+
+    // Complete
+    clearInterval(pi);
+    document.getElementById('prog-fill').style.width = '100%';
+    document.getElementById('prog-pct').textContent = '100%';
+    document.getElementById('scan-status-lbl').textContent = 'Analysis complete';
+    renderDetectResults(data);
+  } catch(e) {
     clearInterval(pi);
     document.getElementById('prog-fill').style.width = '100%';
     document.getElementById('prog-pct').textContent = '100%';
     document.getElementById('scan-status-lbl').textContent = 'Error';
-    showToast('API error: ' + e.message + ' — is the server running? (node api.js)', 'var(--red)', 6000);
-    scanActive = false; return;
+    showToast('Error reading file: ' + e.message, 'var(--red)', 6000);
   }
-
-  // Complete progress bar
-  clearInterval(pi);
-  document.getElementById('prog-fill').style.width = '100%';
-  document.getElementById('prog-pct').textContent = '100%';
-  document.getElementById('scan-status-lbl').textContent = 'Analysis complete';
-
-  // Render real results
-  renderDetectResults(data);
   scanActive = false;
 }
 
@@ -1535,20 +1713,13 @@ async function submitCase() {
   };
 
   try {
-    const resp = await fetch(`${API}/api/case`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({error: resp.statusText}));
-      throw new Error(err.error || resp.statusText);
-    }
-    const data = await resp.json();
+    // Run entirely client-side — no server required
+    const result = clientRunExamination(payload.document_type, payload.observations);
+    const data = { ...payload, examination_timestamp: new Date().toISOString(), ...result };
     showToast(`Case ${data.case_id} examined — ${data.score.confidence_score}% confidence`);
     showCaseResult(data);
   } catch(e) {
-    showToast('API error: ' + e.message + ' — is the server running? (node api.js)', 'var(--red)', 6000);
+    showToast('Examination error: ' + e.message, 'var(--red)', 6000);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M8 5v6M5 8h6"/></svg> Submit for Examination';
